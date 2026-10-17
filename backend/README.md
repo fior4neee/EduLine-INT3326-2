@@ -10,6 +10,30 @@ This folder holds the backend's data model for the M2 modules: auth, users, cour
 
 The backend framework is **NestJS** (TypeScript) with **Prisma** for the database.
 
+### Tech stack
+
+| Thành Phần | Công Nghệ | Mục Đích |
+|---|---|---|
+| Framework backend | **NestJS** | Mỗi chức năng (auth, courses, quizzes…) là một module riêng trong cùng một backend. Có sẵn guard phân quyền, kiểm tra dữ liệu đầu vào và Swagger. |
+| Ngôn ngữ | **TypeScript** | Cùng ngôn ngữ với frontend (Next.js), có kiểu dữ liệu chặt chẽ và ít lỗi hơn. |
+| ORM / Migration | **Prisma** | Định nghĩa schema ở một file duy nhất (`schema.prisma`), tự sinh code truy vấn có kiểu, và quản lý migration theo phiên bản. |
+| Cơ sở dữ liệu | **PostgreSQL 16** (Cloud SQL) | Lưu dữ liệu quan hệ: users, courses, enrollments, quizzes, submissions. Đảm bảo ACID khi nộp bài quiz đồng thời. |
+| Mã hoá mật khẩu | **argon2id** | Băm mật khẩu người dùng và mật khẩu khoá học (Restricted). Không thể giải ngược. |
+| Xác thực | **JWT** access token (15 phút), gửi qua header `Authorization: Bearer` | Không cần lưu phiên trên server, nên Cloud Run tự mở rộng dễ dàng. |
+| Phiên đăng nhập | **Refresh token** xoay vòng (7 ngày), lưu dạng băm SHA-256 | Gia hạn đăng nhập. Phát hiện token bị đánh cắp khi token cũ bị dùng lại. |
+| Định danh (ID) | **UUID** cho User, **số nguyên** cho các đối tượng khác | URL ngắn gọn, ví dụ `/courses/1234`. API hiển thị kèm tiền tố, ví dụ `crs_1234`. |
+| Lưu trữ file | **Cloud Storage** + signed URL | Video, tài liệu và bài nộp đi thẳng từ trình duyệt lên Cloud Storage, API không xử lý file. Database chỉ lưu đường dẫn (key). |
+| Phân phối media | **Cloud CDN** | Phát video và tài liệu nhanh từ máy chủ gần người dùng, qua link có hạn (~10 phút). |
+| Giới hạn upload | 200 MB (video), 100 MB (file khác) | Đủ cho bản demo (proof of concept), tránh chi phí lưu trữ lớn. |
+| Bộ nhớ đệm | **Redis** (Memorystore), từ tuần 5 | Cache danh mục khoá học và đề cương. Giới hạn số request. |
+| Xử lý bất đồng bộ | **Pub/Sub** → Cloud Run worker | Gửi thông báo, email và lập chỉ mục tài liệu cho AI mà không làm chậm request. |
+| Triển khai | **Cloud Run** (Docker) | Tự động mở rộng theo lượng truy cập, nhất là lúc nhiều sinh viên làm quiz cùng lúc. |
+| Bảo mật cấu hình | **Secret Manager** | Lưu khoá JWT và mật khẩu database, không đưa vào code. |
+| Tài liệu API | **Swagger** (`/api/docs`) | Frontend (M4) xem và thử API trực tiếp. |
+| Kiểm thử | **Jest + Supertest**, **k6** | Unit/e2e test cho API. Load test với 50 / 100 / 500 người dùng đồng thời. |
+
+The first 11 rows are decided and reflected in this folder. Redis, Pub/Sub, Cloud Run, Secret Manager, Swagger and the test tools follow the [root README](../README.md) plan and are not built yet.
+
 > This document **replaces section 8 (Data model)** of the [root README](../README.md) for every M2 table. Where the two differ, follow this file.
 
 ---
