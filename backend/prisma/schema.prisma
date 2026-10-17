@@ -1,0 +1,409 @@
+// EduLine M2 data model: auth, users, courses, enrollments, content, quizzes,
+// assignments, notifications. Object shapes are documented in backend/README.md.
+//
+// Conventions
+// - Model fields are camelCase; tables and columns are snake_case via @map.
+// - Users use UUID ids. Every other entity uses a numeric id, which is what
+//   appears in URLs: /courses/7020/lessons/9905. Prefixed forms such as
+//   "crs_1234" are an API presentation concern only.
+// - Every timestamp is *_at.
+// - Media is stored as Cloud Storage object keys, never URLs. Signed URLs are
+//   generated on each request.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum AccountType {
+  Student
+  Instructor
+  Admin
+
+  @@map("account_type")
+}
+
+enum DifficultyLevel {
+  Elementary
+  MiddleSchool @map("Middle School")
+  HighSchool   @map("High School")
+  College
+
+  @@map("difficulty_level")
+}
+
+enum CourseVisibility {
+  Public
+  Restricted
+  Draft
+  Archived
+
+  @@map("course_visibility")
+}
+
+enum EnrollmentStatus {
+  Active
+  Completed
+  Suspended
+  Dropped
+
+  @@map("enrollment_status")
+}
+
+enum LessonType {
+  Video
+  Text
+  Document
+  Quiz
+  Assignment
+
+  @@map("lesson_type")
+}
+
+enum AttemptStatus {
+  InProgress
+  Submitted
+
+  @@map("attempt_status")
+}
+
+enum SubmissionStatus {
+  Submitted
+  Graded
+
+  @@map("submission_status")
+}
+
+enum NotificationType {
+  AssignmentGraded
+  CourseAnnouncement
+  System
+
+  @@map("notification_type")
+}
+
+// ─── Users ──────────────────────────────────────────────────────────────────
+
+model User {
+  id           String      @id @default(uuid()) @db.Uuid
+  username     String      @unique
+  firstName    String      @map("first_name")
+  lastName     String      @map("last_name")
+  email        String      @unique
+  accountType  AccountType @default(Student) @map("account_type")
+  // argon2id hash (hashing, not reversible encryption). Never returned by the API.
+  passwordHash String      @map("password_hash")
+  description  String?
+  isVerified   Boolean     @default(false) @map("is_verified")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  // "enrolled_courses" in the API is built from this relation.
+  enrollments       Enrollment[]
+  instructedCourses CourseInstructor[]
+  quizAttempts      QuizAttempt[]
+  submissions       Submission[]       @relation("SubmissionAuthor")
+  gradedSubmissions Submission[]       @relation("SubmissionGrader")
+  refreshTokens     RefreshToken[]
+  notifications     Notification[]
+
+  @@map("users")
+}
+
+// One row per issued refresh token. Rotated on every /auth/refresh: the old row
+// is revoked and a new one is issued in the same family. Reuse of a revoked
+// token revokes the whole family (token theft detection).
+model RefreshToken {
+  id        Int       @id @default(autoincrement())
+  userId    String    @map("user_id") @db.Uuid
+  // SHA-256 of the raw token. The raw token is only ever held by the client.
+  tokenHash String    @unique @map("token_hash")
+  familyId  String    @map("family_id") @db.Uuid
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+// ─── Courses ────────────────────────────────────────────────────────────────
+
+model Course {
+  id                 Int              @id @default(autoincrement())
+  title              String
+  slug               String           @unique
+  shortSummary       String?          @map("short_summary")
+  difficultyLevel    DifficultyLevel  @map("difficulty_level")
+  // Single source of truth for publish state (is_published was dropped).
+  visibility         CourseVisibility @default(Draft)
+  // argon2id hash of the course password. Required when visibility is Restricted.
+  accessPasswordHash String?          @map("access_password_hash")
+  // Enrollment window. null on either side means open-ended.
+  enrollmentOpensAt  DateTime?        @map("enrollment_opens_at")
+  enrollmentClosesAt DateTime?        @map("enrollment_closes_at")
+  hasCertificate     Boolean          @default(false) @map("has_certificate")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  // "instructor_ids" in the API. An instructor may only manage courses they
+  // are listed on; the creator is added automatically.
+  instructors   CourseInstructor[]
+  // "prerequisite_course_ids" in the API
+  prerequisites CoursePrerequisite[] @relation("CourseRequires")
+  requiredBy    CoursePrerequisite[] @relation("CourseRequiredBy")
+
+  enrollments Enrollment[]
+  modules     Module[]
+  lessons     Lesson[]
+  quizzes     Quiz[]
+  assignments Assignment[]
+
+  @@index([visibility])
+  @@map("courses")
+}
+
+model CourseInstructor {
+  courseId     Int    @map("course_id")
+  instructorId String @map("instructor_id") @db.Uuid
+
+  course     Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  instructor User   @relation(fields: [instructorId], references: [id], onDelete: Cascade)
+
+  @@id([courseId, instructorId])
+  @@index([instructorId])
+  @@map("course_instructors")
+}
+
+// Enforced on enrollment: the student must have a Completed enrollment in every
+// prerequisite course. Chains express ordered series (course 2 requires 1, …).
+// The API rejects self-references and cycles.
+model CoursePrerequisite {
+  courseId             Int @map("course_id")
+  prerequisiteCourseId Int @map("prerequisite_course_id")
+
+  course             Course @relation("CourseRequires", fields: [courseId], references: [id], onDelete: Cascade)
+  prerequisiteCourse Course @relation("CourseRequiredBy", fields: [prerequisiteCourseId], references: [id], onDelete: Cascade)
+
+  @@id([courseId, prerequisiteCourseId])
+  @@index([prerequisiteCourseId])
+  @@map("course_prerequisites")
+}
+
+// ─── Enrollments ────────────────────────────────────────────────────────────
+
+// Progress percentage is owned by M3 (progress module), not stored here.
+model Enrollment {
+  id            Int              @id @default(autoincrement())
+  userId        String           @map("user_id") @db.Uuid
+  courseId      Int              @map("course_id")
+  status        EnrollmentStatus @default(Active)
+  // Incremented when a Dropped enrollment is re-activated. Instructors/Admins
+  // may suspend when timesEnrolled >= 2 and completedAt is null.
+  timesEnrolled Int              @default(1) @map("times_enrolled")
+  // Set when M3 reports that progress reached 100%.
+  completedAt   DateTime?        @map("completed_at")
+  enrolledAt    DateTime         @default(now()) @map("enrolled_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([courseId])
+  @@map("enrollments")
+}
+
+// ─── Content: modules and lessons ───────────────────────────────────────────
+
+model Module {
+  id        Int    @id @default(autoincrement())
+  courseId  Int    @map("course_id")
+  title     String
+  sortOrder Int    @map("sort_order")
+
+  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons Lesson[]
+
+  @@index([courseId, sortOrder])
+  @@map("modules")
+}
+
+model Lesson {
+  id                       Int        @id @default(autoincrement())
+  moduleId                 Int        @map("module_id")
+  // Denormalized from module for direct indexing; must match module.courseId.
+  courseId                 Int        @map("course_id")
+  title                    String
+  slug                     String
+  type                     LessonType
+  sortOrder                Int        @map("sort_order")
+  estimatedDurationMinutes Int?       @map("estimated_duration_minutes")
+  textContent              String?    @map("text_content")
+  // Cloud Storage object keys; the API signs them into URLs per request.
+  videoKey                 String?    @map("video_key")
+  resourceKeys             String[]   @default([]) @map("resource_keys")
+
+  module      Module       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  quizzes     Quiz[]
+  assignments Assignment[]
+
+  @@unique([courseId, slug])
+  @@index([moduleId, sortOrder])
+  @@map("lessons")
+}
+
+// ─── Quizzes ────────────────────────────────────────────────────────────────
+
+model Quiz {
+  id                     Int    @id @default(autoincrement())
+  lessonId               Int    @map("lesson_id")
+  courseId               Int    @map("course_id")
+  title                  String
+  passingScorePercentage Int    @default(80) @map("passing_score_percentage")
+  // null = untimed / unlimited attempts. Rules to be finalized later.
+  timeLimitMinutes       Int?   @map("time_limit_minutes")
+  maxAttempts            Int?   @map("max_attempts")
+
+  lesson    Lesson        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  course    Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questions Question[]
+  attempts  QuizAttempt[]
+
+  @@index([lessonId])
+  @@index([courseId])
+  @@map("quizzes")
+}
+
+model Question {
+  id                 Int      @id @default(autoincrement())
+  quizId             Int      @map("quiz_id")
+  questionText       String   @map("question_text")
+  options            String[]
+  // Never sent to students; the server compares against it on submission.
+  correctOptionIndex Int      @map("correct_option_index")
+  points             Int      @default(10)
+  sortOrder          Int      @map("sort_order")
+
+  quiz    Quiz            @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  answers AttemptAnswer[]
+
+  @@index([quizId, sortOrder])
+  @@map("questions")
+}
+
+// Created by M2's quiz API; score fields are written by M3's scoring module.
+model QuizAttempt {
+  id          Int           @id @default(autoincrement())
+  quizId      Int           @map("quiz_id")
+  userId      String        @map("user_id") @db.Uuid
+  status      AttemptStatus @default(InProgress)
+  score       Int?
+  maxScore    Int?          @map("max_score")
+  passed      Boolean?
+  startedAt   DateTime      @default(now()) @map("started_at")
+  // startedAt + quiz.timeLimitMinutes; null when the quiz is untimed.
+  expiresAt   DateTime?     @map("expires_at")
+  submittedAt DateTime?     @map("submitted_at")
+
+  quiz    Quiz            @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers AttemptAnswer[]
+
+  @@index([quizId, userId])
+  @@index([userId])
+  @@map("quiz_attempts")
+}
+
+model AttemptAnswer {
+  id                  Int  @id @default(autoincrement())
+  attemptId           Int  @map("attempt_id")
+  questionId          Int  @map("question_id")
+  selectedOptionIndex Int? @map("selected_option_index")
+  // Written by M3 scoring on submit.
+  pointsAwarded       Int? @map("points_awarded")
+
+  attempt  QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@map("attempt_answers")
+}
+
+// ─── Assignments ────────────────────────────────────────────────────────────
+
+model Assignment {
+  id                Int       @id @default(autoincrement())
+  lessonId          Int       @map("lesson_id")
+  courseId          Int       @map("course_id")
+  title             String
+  instructions      String
+  maxPoints         Int       @default(100) @map("max_points")
+  allowedExtensions String[]  @default([]) @map("allowed_extensions")
+  dueAt             DateTime? @map("due_at")
+
+  lesson      Lesson       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+
+  @@index([lessonId])
+  @@index([courseId])
+  @@map("assignments")
+}
+
+// One submission per student per assignment. The file lives in the private
+// Cloud Storage "submissions" bucket; only its key is stored here.
+// Resubmitting replaces the file, allowed only before dueAt and before grading.
+model Submission {
+  id           Int              @id @default(autoincrement())
+  assignmentId Int              @map("assignment_id")
+  userId       String           @map("user_id") @db.Uuid
+  fileKey      String           @map("file_key")
+  fileName     String           @map("file_name")
+  sizeBytes    Int              @map("size_bytes")
+  mimeType     String           @map("mime_type")
+  status       SubmissionStatus @default(Submitted)
+  // True when submittedAt is after the assignment's dueAt.
+  isLate       Boolean          @default(false) @map("is_late")
+  score        Int?
+  feedback     String?
+  gradedById   String?          @map("graded_by_id") @db.Uuid
+  submittedAt  DateTime         @default(now()) @map("submitted_at")
+  gradedAt     DateTime?        @map("graded_at")
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  user       User       @relation("SubmissionAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  gradedBy   User?      @relation("SubmissionGrader", fields: [gradedById], references: [id], onDelete: SetNull)
+
+  @@unique([assignmentId, userId])
+  @@index([userId])
+  @@map("submissions")
+}
+
+// ─── Notifications ──────────────────────────────────────────────────────────
+
+model Notification {
+  id          Int              @id @default(autoincrement())
+  recipientId String           @map("recipient_id") @db.Uuid
+  type        NotificationType
+  title       String
+  messageBody String           @map("message_body")
+  // In-app route, e.g. /courses/1234/lessons/9905
+  actionUrl   String?          @map("action_url")
+  isRead      Boolean          @default(false) @map("is_read")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  recipient User @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, isRead, createdAt(sort: Desc)])
+  @@map("notifications")
+}
