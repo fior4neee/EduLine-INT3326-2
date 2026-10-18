@@ -40,8 +40,6 @@ EduLine is a production-oriented MVP of an online learning platform: course deli
 | **M5 (Dân)** | DevOps / Cloud | Docker, CI/CD, GCP deployment, monitoring, autoscaling, load testing |
 | **M6 (Hưng)** | Media + AI/Data | Cloud Storage/CDN, async processing (Pub/Sub + worker), AI tutor RAG |
 
-**Resolved ownership conflicts between the planning documents:** every disputed item goes to **M2**.
-
 | Item | Owner |
 |---|---|
 | Enrollment (data model **and** endpoints), Week 3 | M2 |
