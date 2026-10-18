@@ -1,8 +1,10 @@
 
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import Navbar from "./components/navbar";
 import HeroSection from "./components/heroSection";
 import FeaturedCourses from "./components/featuredCourse";
+import LoginPage from "./pages/loginPage";
+import RegisterPage from "./pages/registerPage";
 
 function HomePage() {
   return (
@@ -10,6 +12,15 @@ function HomePage() {
       <HeroSection />
       <FeaturedCourses />
     </main>
+  );
+}
+
+function MainLayout() {
+  return (
+    <>
+      <Navbar />
+      <Outlet />
+    </>
   );
 }
 
@@ -24,15 +35,18 @@ function PlaceholderPage({ title }: { title: string }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <Navbar />
-
       <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/courses" element={<PlaceholderPage title="Khóa học" />} />
-        <Route path="/instructors" element={<PlaceholderPage title="Giảng viên" />} />
-        <Route path="/about" element={<PlaceholderPage title="Về chúng tôi" />} />
-        <Route path="/login" element={<PlaceholderPage title="Đăng nhập" />} />
-        <Route path="/register" element={<PlaceholderPage title="Đăng ký" />} />
+        {/* Public pages with Navbar */}
+        <Route element={<MainLayout />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/courses" element={<PlaceholderPage title="Khóa học" />} />
+          <Route path="/instructors" element={<PlaceholderPage title="Giảng viên" />} />
+          <Route path="/about" element={<PlaceholderPage title="Về chúng tôi" />} />
+        </Route>
+
+        {/* Authentication pages without Navbar */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
       </Routes>
     </BrowserRouter>
   );
