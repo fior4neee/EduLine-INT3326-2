@@ -1,12 +1,77 @@
 # EduLine Backend: M2 Data Model
 
-This folder holds the backend's data model for the M2 modules: auth, users, courses, enrollments, content (modules and lessons), quizzes, assignments, submissions and notifications.
+Tài khoản admin để test: admin / Admin#2026
+
+Install Node 22 LTS or newer (check with node -v)
+Start Docker Desktop, then start Postgres: cd infrastructure → docker compose up -d
+cd ../backend
+Create the env file: cp .env.example .env, then set JWT_ACCESS_SECRET to 32 or more random characters
+npm ci (installs the exact versions from package-lock.json)
+Ignore the @scarf/scarf install-script warning
+npx prisma migrate deploy (creates the tables)
+npm run seed (creates the admin account above)
+npm run start:dev
+Open Swagger at http://localhost:8000/api/docs <---- cái này giúp m test các api và nhìn thấy các endpoint
+In dev, password reset links are printed in the API terminal instead of being emailed
+Full endpoint list: §8 of backend/README.md
+
+This folder holds the EduLine API (NestJS + Prisma) and the data model for the M2 modules: auth, users, courses, enrollments, content (modules and lessons), quizzes, assignments, submissions and notifications.
 
 | File | What it is |
 |---|---|
 | [prisma/schema.prisma](prisma/schema.prisma) | Database schema (PostgreSQL, Prisma). Source of truth for tables, fields, relations and indexes. |
-| [src/modules/auth/password-policy.ts](src/modules/auth/password-policy.ts) | Password rules used by registration and password change. |
+| [prisma/migrations/](prisma/migrations/) | Versioned SQL migrations. `20261102000000_init` creates every table plus the hand-written partial index for quiz attempts. |
+| [prisma/seed.ts](prisma/seed.ts) | Creates the first Admin account from `SEED_ADMIN_*` in `.env`. |
+| [src/modules/auth/password-policy.ts](src/modules/auth/password-policy.ts) | Password rules used by registration, password change and password reset. |
 | [src/common/config/upload-limits.ts](src/common/config/upload-limits.ts) | Maximum upload sizes: 200 MB for lesson videos, 100 MB for every other file. |
+| [.env.example](.env.example) | Every environment variable the API reads. The API refuses to start if one is invalid. |
+
+### Run it locally
+
+```bash
+cd infrastructure && docker compose up -d      # PostgreSQL on :5432
+cd ../backend
+cp .env.example .env                            # then set JWT_ACCESS_SECRET to 32+ random characters
+npm install
+npx prisma migrate deploy                       # create the tables
+npm run seed                                    # create the Admin account (admin / Admin#2026)
+npm run seed:demo                               # optional: demo instructors, student and 8 courses
+npm run start:dev                               # http://localhost:8000/api/v1
+```
+
+- Swagger: http://localhost:8000/api/docs · health check: `GET /api/v1/health`
+- The API listens on **port 8000**, which is what `frontend/.env.development` points at.
+- With `MAIL_TRANSPORT=console` (the default), password reset links are printed in the API log instead of emailed.
+
+### Code layout
+
+```
+src/
+├── main.ts                    helmet, CORS, /api/v1 prefix, Swagger
+├── app.module.ts              global guards (JWT → roles → rate limit), validation pipe, error filter
+├── common/                    shared by every module
+│   ├── auth/                  access token signing/verification
+│   ├── config/                env validation, upload limits
+│   ├── database/              PrismaService
+│   ├── decorators/            @Public() @Roles() @CurrentUser() @AuthRateLimit()
+│   ├── errors/                AppException + filter → { error: { code, message, details, requestId } }
+│   ├── guards/                JwtAuthGuard, RolesGuard, UserThrottlerGuard
+│   ├── ids/                   crs_1234 ↔ 1234 (toPublicId, @IdParam, PublicIdArray)
+│   ├── logging/               request id + one log line per request
+│   ├── mail/                  MailService (console in dev, outbox → worker in prod)
+│   ├── pagination/            { data, meta } lists, pageSize ≤ 100
+│   └── security/              argon2id, SHA-256, random tokens
+├── events/                    OutboxService + event contracts
+└── modules/
+    ├── access/                AccessPolicyService: every course-level permission rule
+    ├── auth/                  register/login/refresh/logout, forgot/reset, /users/me…
+    ├── users/                 UsersService, /admin/users…
+    ├── courses/               course CRUD, publish, archive, co-instructors
+    ├── enrollments/           enroll, drop, My Courses, students, suspend
+    └── health/
+```
+
+Module rule: a module writes only its own tables and calls other modules through their exported service. `AccessPolicyService` is the one exception: it reads `course_instructors`, `course_prerequisites` and `enrollments` so that every module applies the same permission rules.
 
 The backend framework is **NestJS** (TypeScript) with **Prisma** for the database.
 
@@ -32,7 +97,7 @@ The backend framework is **NestJS** (TypeScript) with **Prisma** for the databas
 | Tài liệu API | **Swagger** (`/api/docs`) | Frontend (M4) xem và thử API trực tiếp. |
 | Kiểm thử | **Jest + Supertest**, **k6** | Unit/e2e test cho API. Load test với 50 / 100 / 500 người dùng đồng thời. |
 
-The first 11 rows are decided and reflected in this folder. Redis, Pub/Sub, Cloud Run, Secret Manager, Swagger and the test tools follow the [root README](../README.md) plan and are not built yet.
+The first 11 rows and Swagger are built. Redis, Pub/Sub, Cloud Run, Secret Manager and the test tools follow the [root README](../README.md) plan and are not built yet.
 
 > This document **replaces section 8 (Data model)** of the [root README](../README.md) for every M2 table. Where the two differ, follow this file.
 
@@ -76,10 +141,38 @@ The database stores **Cloud Storage object keys**, never URLs. On every request 
 
 ## 2. Authentication
 
-Login uses **username + password**.
+Login uses **username (or email) + password**.
 
-- Everyone who registers gets `accountType: "Student"`. Only an **Admin** can promote an account to `"Instructor"` (or `"Admin"`) through `PATCH /admin/users/{id}`.
 - The access token is sent in the **`Authorization: Bearer <token>` header** on every request. Cookies are not used.
+- Usernames and emails are stored lowercase, so `Liem.Phan` and `liem.phan` are the same account.
+
+### Registering as a Student or an Instructor
+
+The register form offers both roles, but **every new account starts as a Student**:
+
+| Chosen at sign-up | Account created | What happens next |
+|---|---|---|
+| `"Student"` (default) | `accountType: "Student"` | Nothing. |
+| `"Instructor"` | `accountType: "Student"`, `instructorRequestStatus: "Pending"` | An Admin approves it (`accountType` becomes `"Instructor"`) or rejects it (stays a Student). Until then the account can do everything a Student can, and nothing an Instructor can. |
+
+- Admin approval queue: `GET /admin/users?instructorRequestStatus=Pending`, then `POST /admin/users/{id}/instructor-request/approve` or `/reject`.
+- A rejected Student can ask again with `POST /users/me/instructor-request`.
+- An Admin can also set any account type directly with `PATCH /admin/users/{id}`, the only route that changes `accountType`. Admins cannot change their own type.
+- The new role appears in the next access token. The frontend gets it by calling `POST /auth/refresh`, or the user logs in again.
+
+This matches how school platforms such as Google Classroom handle teacher sign-up: users say they are a teacher, and an admin verifies them.
+
+### Passwords
+
+| Action | Endpoint | Rules |
+|---|---|---|
+| Change | `PATCH /users/me/password {currentPassword, newPassword}` | `currentPassword` must be right. `newPassword` must follow the policy **and differ from the current password**. Every other login session is logged out; this one stays logged in. |
+| Forgot | `POST /auth/forgot-password {email}` | Always answers `202` with the same message, so it does not reveal which emails have accounts. Sends a link `FRONTEND_URL/reset-password?token=…`, valid for 30 minutes (`PASSWORD_RESET_TTL_MINUTES`). Requesting a new link makes older links stop working. |
+| Reset | `POST /auth/reset-password {token, newPassword}` | The link works once. `newPassword` must follow the policy and differ from the current password. Every login session is logged out. |
+
+The reset token is stored only as a SHA-256 hash (`PasswordResetToken`). The email goes out through the outbox → worker in production (`MAIL_TRANSPORT=outbox`). In development it is printed to the API log.
+
+There is no account lockout. Login, register, refresh, password change/reset, forgot-password and course enrollment are rate limited to **10 requests per minute** per IP (or per user when logged in). Every other route allows 120 requests per minute. Both limits are set in `.env`.
 
 Password rules (enforced in `password-policy.ts`):
 
@@ -129,11 +222,13 @@ Each block shows the object as the API sends it. Comments describe each field's 
   "accountType": "Student",                    // "Student" | "Instructor" | "Admin", default "Student"
   "description": "Second-year CS student.",    // string (plain text) | null
   "isVerified": false,                         // boolean, default false
-  "enrolledCourses": [                         // built from Enrollments, not stored on the user
+  "instructorRequestStatus": null,             // "Pending" | "Approved" | "Rejected" | null (never asked)
+  "enrolledCourses": [                         // built from Enrollments (Dropped ones left out); only on login, refresh and /users/me
     {
       "courseId": "crs_1234",
+      "status": "Active",                      // enrollment status
       "enrolledAt": "2026-10-17T16:30:00Z",
-      "progressPercentage": 0                  // integer 0–100, supplied by M3's progress module
+      "progressPercentage": 0                  // integer 0–100, from M3's progress module (placeholder: 100 if Completed, else 0)
     }
   ],
   "createdAt": "2026-10-17T16:00:00Z",
@@ -164,6 +259,10 @@ Course  (e.g. "Data Science Fundamentals", crs_1234)
   "enrollmentOpensAt": "2026-10-01T00:00:00Z", // timestamp | null (null = open from now)
   "enrollmentClosesAt": "2026-12-31T23:59:59Z", // timestamp | null (null = never closes)
   "hasCertificate": true,                      // boolean, default false
+  "category": "Data Science",                  // string (max 50) | null; label for course cards
+  "thumbnailUrl": "/images/courses/python_data_course.png", // https URL or frontend path | null; public, not signed
+  "instructors": [{ "id": "8b9c…", "firstName": "Hà", "lastName": "Phạm Thu" }], // names for display
+  "stats": { "lessonCount": 8, "totalDurationMinutes": 205, "studentCount": 12 }, // computed per request
   "prerequisiteCourseIds": ["crs_1010"],       // stored in CoursePrerequisite; must be completed before enrolling
   "createdAt": "2026-03-15T08:00:00Z",
   "updatedAt": "2026-10-17T16:15:00Z"
@@ -211,6 +310,15 @@ Course  (e.g. "Data Science Fundamentals", crs_1234)
 }
 ```
 
+What each status allows:
+
+| Status | Content | Quizzes / assignments | Own results | Can drop? |
+|---|---|---|---|---|
+| `Active` | Yes | Yes | Yes | Yes |
+| `Completed` | Read-only | **No** (no new attempts or submissions) | Yes | No |
+| `Suspended` | No | No | No | No |
+| `Dropped` | No | No | No | n/a (can re-enroll) |
+
 - Each student has **one enrollment row per course**: `(userId, courseId)` is unique. Re-enrolling after dropping re-activates that row and increases `timesEnrolled`.
 - **Suspending:** an Instructor of the course or an Admin can set `status` to `"Suspended"` only when `timesEnrolled` is 2 or more **and** `completedAt` is `null` (enrolled at least twice, never finished).
   - Suspension applies to **students only**. A suspended student cannot open content, take quizzes, submit assignments or re-enroll in that course.
@@ -240,6 +348,7 @@ Course  (e.g. "Data Science Fundamentals", crs_1234)
   "type": "Video",                      // "Video" | "Text" | "Document" | "Quiz" | "Assignment"
   "sortOrder": 1,                       // integer, order within the module
   "estimatedDurationMinutes": 12,       // integer | null
+  "isPreview": false,                   // boolean, default false; true = free preview, see below
   "textContent": null,                  // string | null, used when type is "Text"
   "videoUrl": "https://cdn.eduline.example/media/…?Signature=…", // signed URL generated per request | null
   "downloadableResources": [            // signed URLs generated per request
@@ -256,6 +365,9 @@ What the database stores instead of the URLs:
 | `resourceKeys` | `["courses/1234/lessons/9901/setup.pdf"]` | `downloadableResources` (signed) |
 
 Lessons of type `"Quiz"` or `"Assignment"` are the slots that a Quiz or Assignment attaches to through `lessonId`.
+
+- **Preview lessons:** a lesson with `isPreview: true` can be opened by anyone who can see a published course, without enrolling (like Udemy's free previews). Students suspended from the course still cannot open it.
+- **Interrupted uploads:** `videoKey` / `resourceKeys` are written only by `POST /lessons/{id}/content/complete`, after the API has checked that the uploaded file exists in Cloud Storage and has the right size and type. If the connection drops mid-upload, `/complete` is never called, so the lesson simply has no video and the instructor uploads again. There is no "pending upload" table.
 
 ### 3.6 Quiz, Question, Quiz attempt
 
@@ -378,6 +490,8 @@ Questions and attempts are separate tables, not JSON inside the quiz. This lets 
 
 The worker creates notifications. The API only lists them and marks them as read.
 
+The database also stores `sourceEventId` (never sent): the `eventId` of the Pub/Sub event that created the notification. It is unique, so a redelivered event cannot create a second notification.
+
 ### 3.10 Refresh token (server-side only)
 
 Never returned by the API. It is shown here so the team knows what the server stores for each login session.
@@ -408,7 +522,9 @@ Quiz ─< QuizAttempt ─< AttemptAnswer >─ Question
 User ─< QuizAttempt
 Lesson ─< Assignment ─< Submission >─ User  (student; gradedById is a second link to the instructor)
 User ─< RefreshToken
+User ─< PasswordResetToken
 User ─< Notification
+OutboxEvent                                 (no relations; events waiting to be published)
 ```
 
 - `A ─< B` means one A has many B.
@@ -449,6 +565,31 @@ This is the first version of the backend data model. It starts from the M2 objec
 | 25 | **Resubmission** allowed until `dueAt` passes or the submission is graded, whichever comes first. | Team decision. |
 | 26 | Lesson video limit raised to **200 MB**. Other files stay at 100 MB. | Enough for a proof of concept. |
 
+### Changes as of 02/11/2026
+
+| # | Change | Reason |
+|---|---|---|
+| 27 | Register accepts `accountType: "Student" \| "Instructor"`. Instructor sign-ups are created as Students with **`instructorRequestStatus: "Pending"`** (+ `instructorRequestedAt`); an Admin approves or rejects. | Team decision (integration-review #4). Keeps the account safe until verified. |
+| 28 | **Forgot / reset password** added: `PasswordResetToken` table (SHA-256 hash, 30 min, single use). Reset logs out every session. | Team decision. |
+| 29 | **Password change** must follow the policy and differ from the current password. Logs out other sessions. | Team decision. |
+| 30 | Lesson gained **`isPreview`** (free preview lessons). | Team decision (integration-review #7). |
+| 31 | Media keys are written only at `/content/complete`, after the upload is verified. No `ContentAsset` table. | Team decision (integration-review #8, option B). |
+| 32 | **Completed** enrollments are read-only: content and own results, no new quiz attempts or submissions. | Team decision (integration-review #18). |
+| 33 | **`OutboxEvent`** table and `Notification.sourceEventId` (unique) added. | ADR-005: no lost or duplicated events (integration-review #11, #12). |
+| 34 | Partial unique index: at most one `InProgress` attempt per student per quiz (raw SQL in the init migration). | quiz-submission-design.md (integration-review #13). |
+| 35 | API port is **8000**. Usernames and emails are stored lowercase. | Matches the frontend config (integration-review #5). |
+| 36 | Rate limits: 10/min on auth and enrollment routes, 120/min elsewhere, counted per user (per IP when anonymous). No account lockout. | Team decision. |
+| 37 | Course detail (`GET /courses/{id}`) includes the outline (modules → lessons, titles only). Courses can have co-instructors added/removed by their staff; the last instructor cannot be removed. | Needed by the course page and by Admin-created courses. |
+| 38 | Course gained **`category`** and **`thumbnailUrl`** (public cover image). Responses add `instructors` (names) and computed `stats`. `GET /courses/{id}` adds `prerequisites` (titles) and `viewer` (`isStaff`, the caller's `enrollment`). | Course cards and the enroll button on the frontend. |
+| 39 | Minimal **content endpoints**: create/delete modules and lessons (no edit, reorder or upload yet). `npm run seed:demo` loads demo courses. | An instructor can build and publish a course end to end. |
+| 40 | **Login accepts a username or an email** in the `username` field (usernames cannot contain `@`). | The login form asks for either. |
+| 41 | The first Admin is created by **`npm run seed`** (`SEED_ADMIN_*` in `.env`). Admin approval queue: `GET /admin/users?instructorRequestStatus=Pending` + `POST /admin/users/{id}/instructor-request/approve\|reject`. A rejected Student can ask again with `POST /users/me/instructor-request`. | Only an Admin can promote accounts, so one must exist from the start. |
+| 42 | Admins cannot change their own `accountType`. A role change reaches the access token at the next `POST /auth/refresh` (up to 15 minutes later). | Avoids locking out the last Admin; the role travels in the JWT. |
+| 43 | User object gained **`instructorRequestStatus`**. `enrolledCourses` items gained `status` and leave out Dropped enrollments. | The frontend shows the approval state and the enrollment state. |
+| 44 | IDs in URLs and request bodies accept both forms: `crs_1234` or `1234`. Responses always use the prefixed form. | Frontend can pass back the ids it received. |
+| 45 | Course rules: **publish** needs ≥ 1 lesson, and Restricted also needs a course password (which cannot be removed while Restricted). **Drop** is allowed only from Active. **Suspend** is allowed from Active or Dropped (with `timesEnrolled ≥ 2`, never completed). | Prevents empty courses, and dropping as a way around a suspension. |
+| 46 | Events written to the outbox: `ENROLLMENT_CREATED`, `COURSE_PUBLISHED`, `INSTRUCTOR_REQUEST_DECIDED`, `EMAIL_REQUESTED` (password reset). Published to Pub/Sub once the relay exists (week 7). | ADR-005. |
+
 ---
 
 ## 6. Jobs for later
@@ -459,9 +600,56 @@ These are agreed to be done later. The fields already exist, so no schema change
 |---|---|---|
 | 1 | **Email verification.** Design the flow (email link + token), and decide what an unverified user cannot do. | `User.isVerified` (always `false` for now). Nothing is blocked. |
 | 2 | **Quiz time limit and attempt limit rules.** Decide defaults and how the API enforces them (reject answers after `expiresAt`, reject a new attempt past `maxAttempts`). | `Quiz.timeLimitMinutes`, `Quiz.maxAttempts`, `QuizAttempt.expiresAt`, all optional. Quizzes are untimed and unlimited. |
+| 3 | **Outbox relay** (week 7): publish unpublished `OutboxEvent` rows to Pub/Sub and set `publishedAt`. | Events are already written for `ENROLLMENT_CREATED`, `COURSE_PUBLISHED`, `INSTRUCTOR_REQUEST_DECIDED`, `EMAIL_REQUESTED`. |
+| 4 | **Password reset email template** in the worker (M6) for `EMAIL_REQUESTED` with `template: "password-reset"`. | API side done; set `MAIL_TRANSPORT=outbox` once the worker sends it. |
+| 5 | **Real progress percentage** from M3's progress module. | Placeholder: 100 when Completed, else 0. M3 calls `EnrollmentsService.markCompleted(userId, courseId)` at 100 %. |
+| 6 | **Tests** (RBAC T01–T31, Jest + Supertest). | Not started; to be planned. |
 
 ---
 
 ## 7. Not yet decided
 
-Nothing is open as of 17/10/2026. New questions go here.
+Nothing is open as of 02/11/2026. New questions go here.
+
+---
+
+## 8. Endpoints built (week 3)
+
+Base path `/api/v1`. Full request/response shapes are in Swagger (`/api/docs`). Ids in URLs can be `1234` or `crs_1234`.
+
+| Method and path | Who | Notes |
+|---|---|---|
+| `GET /health` | anyone | Reads the database |
+| `POST /auth/register` | anyone | `{username, firstName, lastName, email, password, accountType?}` → same as login, `201` |
+| `POST /auth/login` | anyone | `{username, password}`; `username` may also be the email → `{accessToken, refreshToken, user}` |
+| `POST /auth/refresh` | refresh token | `{refreshToken}` → new pair + user |
+| `POST /auth/logout` | refresh token | `{refreshToken}` → `204`, ends that login session |
+| `POST /auth/forgot-password` | anyone | `{email}` → `202` |
+| `POST /auth/reset-password` | reset link | `{token, newPassword}` → `204` |
+| `GET /users/me` | logged in | User + `enrolledCourses` |
+| `PATCH /users/me` | logged in | `{firstName?, lastName?, description?}` |
+| `PATCH /users/me/password` | logged in | `{currentPassword, newPassword}` → `204` |
+| `POST /users/me/instructor-request` | Student | Ask to become an Instructor |
+| `GET /admin/users` | Admin | `?accountType=&instructorRequestStatus=&q=&page=&pageSize=` |
+| `GET /admin/users/{id}` | Admin | |
+| `PATCH /admin/users/{id}` | Admin | `{accountType}` |
+| `POST /admin/users/{id}/instructor-request/approve` · `/reject` | Admin | |
+| `GET /courses` | anyone | Catalog: Public + Restricted. `?q=&difficultyLevel=&sort=newest\|title&page=&pageSize=` |
+| `GET /courses/{id or slug}` | anyone who can see it | Course + `modules[].lessons[]` outline |
+| `POST /courses` | Instructor, Admin | Created as Draft; creator becomes an instructor |
+| `PATCH /courses/{id}` | course staff | Any field except visibility; `coursePassword: null` removes it |
+| `POST /courses/{id}/publish` | course staff | `{visibility: "Public" \| "Restricted"}`; needs ≥ 1 lesson; Restricted needs a password |
+| `DELETE /courses/{id}` | course staff | Archives |
+| `POST /courses/{id}/instructors` · `DELETE /courses/{id}/instructors/{userId}` | course staff | Co-instructors |
+| `GET /instructor/courses` | Instructor, Admin | Courses they teach, any visibility |
+| `POST /courses/{id}/enroll` | Student | `{coursePassword?}` |
+| `DELETE /courses/{id}/enroll` | Student | Active → Dropped, `204` |
+| `GET /me/courses` | logged in | `[{enrollment, course, progressPercentage}]` |
+| `GET /courses/{id}/students` | course staff | `?status=`; `[{enrollment, student}]` |
+| `PATCH /enrollments/{id}` | course staff | `{status: "Suspended" \| "Active"}` |
+| `POST /courses/{id}/modules` | course staff | `{title}`; added at the end |
+| `DELETE /modules/{id}` | course staff | Deletes its lessons too |
+| `POST /modules/{id}/lessons` | course staff | `{title, type: "Text" \| "Video" \| "Document", textContent?, estimatedDurationMinutes?, isPreview?}` |
+| `DELETE /lessons/{id}` | course staff | |
+
+"Course staff" = an Instructor listed on the course, or any Admin. Every error has the shape `{ "error": { "code", "message", "details", "requestId" } }`; the `code` values are stable and meant for the frontend to switch on (e.g. `ALREADY_ENROLLED`, `PREREQUISITES_NOT_MET`, `INVALID_COURSE_PASSWORD`).

@@ -275,6 +275,8 @@ EduLine-INT3326-2/
 
 ## 8. Data model (ERD)
 
+> **Outdated.** The current data model is [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma), documented in [`backend/README.md`](backend/README.md) §3. The sketch below is the week 1 draft and is kept only for history.
+
 ```
 users                          courses                         course_modules
  id (uuid) PK          1     N  id PK                    1   N  id PK
@@ -354,6 +356,8 @@ Everyone reuses one central rule: `AccessPolicy.canAccessCourseContent(user, cou
 ## 10. API design (M2 modules)
 
 Base path is `/api/v1`, documented in Swagger at `/api/docs`.
+
+> Request and response bodies follow [`backend/README.md`](backend/README.md) (§2, §3, and §8 for the endpoints built so far). Where this section differs (e.g. register fields, login by username), the backend README wins.
 
 **Conventions**
 - JSON, camelCase, ISO-8601 UTC timestamps, UUID ids
@@ -555,7 +559,7 @@ Pub/Sub delivers **at least once**, so consumers must be idempotent and dedupe o
 - [x] Ownership conflicts → M2 (enrollment, course CRUD, quiz API, assignment)
 - [x] Backend framework: **NestJS**
 - [x] ORM: **Prisma**
-- [ ] Token transport: Authorization header (simpler) or httpOnly cookie (safer vs XSS, needs CSRF protection)
-- [ ] Assignment resubmission: one per student, or numbered attempts
+- [x] Token transport: **Authorization header** (backend README change #20, ADR-008)
+- [x] Assignment resubmission: **one submission per student**, replaceable until `dueAt` or grading (backend README change #25)
 - [ ] Email provider for the worker: SendGrid or Resend
 - [ ] Cloud SQL connection limit vs Cloud Run `max-instances` (pool size × instances must stay under the DB limit)

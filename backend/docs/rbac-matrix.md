@@ -20,10 +20,14 @@ All rules in one service so every module uses the same logic.
 | `isCourseStaff(user, courseId)` | `user.accountType = Admin`, **or** a `CourseInstructor(courseId, user.id)` row exists |
 | `canSeeCourse(user, course)` | `course.visibility ∈ {Public, Restricted}`, **or** `isCourseStaff`, **or** (`Archived` and the user has an enrollment in `Active`/`Completed`) |
 | `canViewContent(user, course)` | `isCourseStaff`, **or** enrollment `status ∈ {Active, Completed}` and `visibility ≠ Draft` |
+| `canViewLesson(user, course, lesson)` | `lesson.isPreview` and course `Public`/`Restricted` and the user is not Suspended in it (anonymous allowed), **or** `canViewContent` |
+| `canViewOwnResults(user, course)` | `isCourseStaff`, **or** enrollment `status ∈ {Active, Completed}` |
 | `canParticipate(user, course)` (take quiz, submit) | `user.accountType = Student`, enrollment `status = Active`, `visibility ∈ {Public, Restricted}` |
 | `canEnroll(user, course)` | Student; `visibility ∈ {Public, Restricted}`; now within `[enrollmentOpensAt, enrollmentClosesAt]` (null = open); every prerequisite has an enrollment `Completed`; no enrollment, or enrollment `Dropped`; correct course password when `Restricted` |
 
-Suspended students fail `canViewContent`, `canParticipate` and `canEnroll` for that course (backend README §3.3).
+Suspended students fail `canViewContent`, `canParticipate` and `canEnroll` for that course (backend README §3.3). **Completed** students keep read-only content and their results, but fail `canParticipate` (integration-review #18).
+
+Implemented in `backend/src/modules/access/access-policy.service.ts` (`assertEnrollmentRules` = the course-side part of `canEnroll`).
 
 ## 3. Status code policy
 
@@ -44,11 +48,13 @@ Legend: ✅ allowed · ⛔ 403 · 🔒 401 · 👻 404 · *Staff* = instructor l
 
 | Endpoint | Anonymous | Student | Instructor | Admin | Notes |
 |---|---|---|---|---|---|
-| `POST /auth/register` | ✅ | ✅ | ✅ | ✅ | Always creates `Student`; any `accountType` in body is ignored/rejected |
+| `POST /auth/register` | ✅ | ✅ | ✅ | ✅ | Always creates `Student`. `accountType: "Instructor"` adds a Pending instructor request; `"Admin"` → 400 |
+| `POST /auth/forgot-password`, `/auth/reset-password` | ✅ | ✅ | ✅ | ✅ | Rate limited; same `202` for unknown emails |
 | `POST /auth/login` | ✅ | ✅ | ✅ | ✅ | Rate limited |
 | `POST /auth/refresh`, `/auth/logout` | ✅ (needs refresh token) | ✅ | ✅ | ✅ | Reused revoked token → whole family revoked |
 | `GET/PATCH /users/me`, `PATCH /users/me/password` | 🔒 | ✅ | ✅ | ✅ | `PATCH /users/me` must not accept `accountType`, `email` verification flags |
-| `GET/PATCH /admin/users…` | 🔒 | ⛔ | ⛔ | ✅ | Only route that changes `accountType` |
+| `POST /users/me/instructor-request` | 🔒 | ✅ | ⛔ (422) | ⛔ (422) | Students only; 409 if already Pending |
+| `GET/PATCH /admin/users…`, `POST /admin/users/:id/instructor-request/approve\|reject` | 🔒 | ⛔ | ⛔ | ✅ | Only routes that change `accountType`; an Admin cannot change their own |
 
 ### Courses and enrollment
 
@@ -71,7 +77,7 @@ Legend: ✅ allowed · ⛔ 403 · 🔒 401 · 👻 404 · *Staff* = instructor l
 |---|---|---|---|---|---|
 | Module/lesson create, edit, reorder, delete | 🔒 | ⛔ | ⛔ | ✅ | ⛔ |
 | `POST /lessons/:id/content/upload-url`, `/complete` | 🔒 | ⛔ | ⛔ | ✅ | ⛔ |
-| `GET /lessons/:id` (metadata + signed URLs) | 🔒 | ✅ | ⛔ | ✅ | ⛔ |
+| `GET /lessons/:id` (metadata + signed URLs) | 🔒 | ✅ | ⛔ (✅ if `isPreview`, except Suspended) | ✅ | ⛔ |
 
 ### Quizzes (week 6)
 

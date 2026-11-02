@@ -29,6 +29,16 @@ enum AccountType {
   @@map("account_type")
 }
 
+// Set when someone registers as an Instructor. The account stays a Student
+// until an Admin approves the request.
+enum InstructorRequestStatus {
+  Pending
+  Approved
+  Rejected
+
+  @@map("instructor_request_status")
+}
+
 enum DifficultyLevel {
   Elementary
   MiddleSchool @map("Middle School")
@@ -91,28 +101,33 @@ enum NotificationType {
 // ─── Users ──────────────────────────────────────────────────────────────────
 
 model User {
-  id           String      @id @default(uuid()) @db.Uuid
-  username     String      @unique
-  firstName    String      @map("first_name")
-  lastName     String      @map("last_name")
-  email        String      @unique
-  accountType  AccountType @default(Student) @map("account_type")
+  id                      String                   @id @default(uuid()) @db.Uuid
+  username                String                   @unique
+  firstName               String                   @map("first_name")
+  lastName                String                   @map("last_name")
+  email                   String                   @unique
+  accountType             AccountType              @default(Student) @map("account_type")
   // argon2id hash (hashing, not reversible encryption). Never returned by the API.
-  passwordHash String      @map("password_hash")
-  description  String?
-  isVerified   Boolean     @default(false) @map("is_verified")
-  createdAt    DateTime    @default(now()) @map("created_at")
-  updatedAt    DateTime    @updatedAt @map("updated_at")
+  passwordHash            String                   @map("password_hash")
+  description             String?
+  isVerified              Boolean                  @default(false) @map("is_verified")
+  // null = never asked to be an Instructor.
+  instructorRequestStatus InstructorRequestStatus? @map("instructor_request_status")
+  instructorRequestedAt   DateTime?                @map("instructor_requested_at")
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
 
   // "enrolled_courses" in the API is built from this relation.
-  enrollments       Enrollment[]
-  instructedCourses CourseInstructor[]
-  quizAttempts      QuizAttempt[]
-  submissions       Submission[]       @relation("SubmissionAuthor")
-  gradedSubmissions Submission[]       @relation("SubmissionGrader")
-  refreshTokens     RefreshToken[]
-  notifications     Notification[]
+  enrollments         Enrollment[]
+  instructedCourses   CourseInstructor[]
+  quizAttempts        QuizAttempt[]
+  submissions         Submission[]         @relation("SubmissionAuthor")
+  gradedSubmissions   Submission[]         @relation("SubmissionGrader")
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  notifications       Notification[]
 
+  @@index([instructorRequestStatus])
   @@map("users")
 }
 
@@ -136,6 +151,22 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+// One row per "forgot password" request. Single use, short-lived. Only the
+// SHA-256 hash is stored; the raw token is only in the emailed link.
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
 // ─── Courses ────────────────────────────────────────────────────────────────
 
 model Course {
@@ -152,6 +183,10 @@ model Course {
   enrollmentOpensAt  DateTime?        @map("enrollment_opens_at")
   enrollmentClosesAt DateTime?        @map("enrollment_closes_at")
   hasCertificate     Boolean          @default(false) @map("has_certificate")
+  // Free-text label shown on course cards, e.g. "Cloud Computing".
+  category           String?
+  // Public cover image (catalog thumbnails are not access-controlled).
+  thumbnailUrl       String?          @map("thumbnail_url")
   createdAt          DateTime         @default(now()) @map("created_at")
   updatedAt          DateTime         @updatedAt @map("updated_at")
 
@@ -247,8 +282,12 @@ model Lesson {
   type                     LessonType
   sortOrder                Int        @map("sort_order")
   estimatedDurationMinutes Int?       @map("estimated_duration_minutes")
+  // Free preview: visible to anyone who can see the course, without enrolling.
+  isPreview                Boolean    @default(false) @map("is_preview")
   textContent              String?    @map("text_content")
   // Cloud Storage object keys; the API signs them into URLs per request.
+  // Written only by /content/complete after the uploaded object is verified,
+  // so an interrupted upload never leaves a broken lesson.
   videoKey                 String?    @map("video_key")
   resourceKeys             String[]   @default([]) @map("resource_keys")
 
@@ -392,18 +431,37 @@ model Submission {
 // ─── Notifications ──────────────────────────────────────────────────────────
 
 model Notification {
-  id          Int              @id @default(autoincrement())
-  recipientId String           @map("recipient_id") @db.Uuid
-  type        NotificationType
-  title       String
-  messageBody String           @map("message_body")
+  id            Int              @id @default(autoincrement())
+  recipientId   String           @map("recipient_id") @db.Uuid
+  type          NotificationType
+  title         String
+  messageBody   String           @map("message_body")
   // In-app route, e.g. /courses/1234/lessons/9905
-  actionUrl   String?          @map("action_url")
-  isRead      Boolean          @default(false) @map("is_read")
-  createdAt   DateTime         @default(now()) @map("created_at")
+  actionUrl     String?          @map("action_url")
+  isRead        Boolean          @default(false) @map("is_read")
+  // eventId of the Pub/Sub event that created it. Unique, so a redelivered
+  // event never creates a second notification.
+  sourceEventId String?          @unique @map("source_event_id") @db.Uuid
+  createdAt     DateTime         @default(now()) @map("created_at")
 
   recipient User @relation(fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@index([recipientId, isRead, createdAt(sort: Desc)])
   @@map("notifications")
+}
+
+// ─── Events (transactional outbox) ──────────────────────────────────────────
+
+// Written in the same transaction as the change it describes. A relay
+// publishes unpublished rows to Pub/Sub and sets publishedAt. The id is the
+// eventId consumers dedupe on.
+model OutboxEvent {
+  id          String    @id @default(uuid()) @db.Uuid
+  type        String
+  payload     Json
+  createdAt   DateTime  @default(now()) @map("created_at")
+  publishedAt DateTime? @map("published_at")
+
+  @@index([publishedAt, createdAt])
+  @@map("outbox_events")
 }

@@ -1,13 +1,21 @@
 
+import { useEffect, useState } from "react";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import CourseCard from "./courseCard";
-import { courses } from "../data/courses";
+import { listCatalog, type Course } from "../services/courses";
+import { getErrorMessage } from "../services/api";
 
 export default function FeaturedCourses() {
-  const featuredCourses = courses
-    .filter((course) => course.featured)
-    .slice(0, 4);
+  const [featuredCourses, setFeaturedCourses] = useState<Course[] | null>(null);
+  const [error, setError] = useState("");
+
+  // The four oldest published courses (the original catalog), from the API.
+  useEffect(() => {
+    listCatalog({ pageSize: 100 })
+      .then((page) => setFeaturedCourses(page.data.slice(-4).reverse()))
+      .catch((err) => setError(getErrorMessage(err)));
+  }, []);
 
   return (
     <section className="w-full bg-white py-16 lg:py-10">
@@ -42,8 +50,10 @@ export default function FeaturedCourses() {
         </div>
 
         {/* Course grid */}
+        {error && <p className="rounded-xl bg-red-50 p-4 text-sm text-red-600">{error}</p>}
+        {!featuredCourses && !error && <p className="text-sm text-slate-400">Đang tải khóa học…</p>}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
-          {featuredCourses.map((course) => (
+          {featuredCourses?.map((course) => (
             <CourseCard key={course.id} course={course} />
           ))}
         </div>

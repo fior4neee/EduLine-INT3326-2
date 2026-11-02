@@ -1,52 +1,77 @@
 
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   GraduationCap,
   UserRound,
+  AtSign,
   Mail,
   LockKeyhole,
   Eye,
   EyeOff,
   ArrowRight,
   CheckCircle2,
+  Circle,
 } from "lucide-react";
+import { useAuth } from "../auth/auth-context";
+import { PASSWORD_REGEX, PASSWORD_RULES, USERNAME_REGEX } from "../lib/password-policy";
+import { getErrorMessage } from "../services/api";
 
 export default function RegisterPage() {
+  const navigate = useNavigate();
+  const { register } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState({
-    fullName: "",
+    lastName: "",
+    firstName: "",
+    username: "",
     email: "",
     password: "",
     confirmPassword: "",
-    role: "student",
-    agreeTerms: false,
+    role: "Student" as "Student" | "Instructor",
   });
 
-  const updateField = (field: string, value: string | boolean) => {
+  const updateField = (field: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setError("");
   };
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    if (form.password.length < 8) {
-      setError("Mật khẩu phải có ít nhất 8 ký tự.");
+    if (!USERNAME_REGEX.test(form.username.trim())) {
+      setError('Tên đăng nhập gồm 3–32 ký tự: chữ, số, ".", "_" hoặc "-".');
       return;
     }
-
+    if (!PASSWORD_REGEX.test(form.password)) {
+      setError("Mật khẩu chưa đủ mạnh. Xem các yêu cầu bên dưới ô mật khẩu.");
+      return;
+    }
     if (form.password !== form.confirmPassword) {
       setError("Mật khẩu xác nhận không khớp.");
       return;
     }
 
-    // TODO: Tích hợp POST /api/auth/register
-    // Backend cần kiểm tra dữ liệu và quyền đăng ký vai trò.
-    alert("Thông tin hợp lệ. Chức năng đăng ký đang chờ Auth API.");
+    setSubmitting(true);
+    try {
+      await register({
+        username: form.username.trim(),
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        accountType: form.role,
+      });
+      navigate("/account", { replace: true, state: { justRegistered: true } });
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const inputClass =
@@ -105,26 +130,65 @@ export default function RegisterPage() {
             <span className="text-2xl font-bold">EduLine</span>
           </Link>
 
-          <h1 className="text-3xl font-extrabold text-slate-900 -mt-25">
+          <h1 className="text-3xl font-extrabold text-slate-900">
             Tạo tài khoản mới
           </h1>
 
           <form onSubmit={handleSubmit} className="mt-7 space-y-4">
 
-            {/* Full name */}
+            {/* Last name + first name */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="register-last-name" className="mb-2 block text-sm font-semibold text-slate-700">
+                  Họ
+                </label>
+                <div className="relative">
+                  <UserRound size={18} className="absolute top-1/2 left-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    id="register-last-name"
+                    required
+                    maxLength={50}
+                    autoComplete="family-name"
+                    value={form.lastName}
+                    onChange={(e) => updateField("lastName", e.target.value)}
+                    placeholder="Nguyễn Văn"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="register-first-name" className="mb-2 block text-sm font-semibold text-slate-700">
+                  Tên
+                </label>
+                <input
+                  id="register-first-name"
+                  required
+                  maxLength={50}
+                  autoComplete="given-name"
+                  value={form.firstName}
+                  onChange={(e) => updateField("firstName", e.target.value)}
+                  placeholder="A"
+                  className={inputClass.replace("pl-12", "pl-4")}
+                />
+              </div>
+            </div>
+
+            {/* Username */}
             <div>
-              <label htmlFor="register-name" className="mb-2 block text-sm font-semibold text-slate-700">
-                Họ và tên
+              <label htmlFor="register-username" className="mb-2 block text-sm font-semibold text-slate-700">
+                Tên đăng nhập
               </label>
               <div className="relative">
-                <UserRound size={18} className="absolute top-1/2 left-4 -translate-y-1/2 text-slate-400" />
+                <AtSign size={18} className="absolute top-1/2 left-4 -translate-y-1/2 text-slate-400" />
                 <input
-                  id="register-name"
+                  id="register-username"
                   required
-                  autoComplete="name"
-                  value={form.fullName}
-                  onChange={(e) => updateField("fullName", e.target.value)}
-                  placeholder="Nguyễn Văn A"
+                  minLength={3}
+                  maxLength={32}
+                  autoComplete="username"
+                  value={form.username}
+                  onChange={(e) => updateField("username", e.target.value)}
+                  placeholder="nguyenvana"
                   className={inputClass}
                 />
               </div>
@@ -161,9 +225,14 @@ export default function RegisterPage() {
                 onChange={(e) => updateField("role", e.target.value)}
                 className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none focus:border-blue-500"
               >
-                <option value="student">Học viên (Student)</option>
-                <option value="instructor">Giảng viên (Instructor)</option>
+                <option value="Student">Học viên (Student)</option>
+                <option value="Instructor">Giảng viên (Instructor)</option>
               </select>
+              {form.role === "Instructor" && (
+                <p className="mt-2 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-800">
+                  Tài khoản giảng viên cần Admin duyệt. Trong lúc chờ, bạn dùng được mọi chức năng của học viên.
+                </p>
+              )}
             </div>
 
             {/* Password */}
@@ -178,10 +247,11 @@ export default function RegisterPage() {
                   type={showPassword ? "text" : "password"}
                   required
                   minLength={8}
+                  maxLength={32}
                   autoComplete="new-password"
                   value={form.password}
                   onChange={(e) => updateField("password", e.target.value)}
-                  placeholder="Ít nhất 8 ký tự"
+                  placeholder="8–32 ký tự"
                   className={inputClass + " pr-12"}
                 />
                 <button
@@ -193,6 +263,20 @@ export default function RegisterPage() {
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
+              <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                {PASSWORD_RULES.map((rule) => {
+                  const ok = rule.test(form.password);
+                  return (
+                    <li
+                      key={rule.label}
+                      className={`flex items-center gap-1.5 ${ok ? "text-emerald-600" : "text-slate-400"}`}
+                    >
+                      {ok ? <CheckCircle2 size={13} /> : <Circle size={13} />}
+                      {rule.label}
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
 
             {/* Confirm password */}
@@ -224,16 +308,17 @@ export default function RegisterPage() {
             </div>
 
             {error && (
-              <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-600">
+              <p role="alert" className="whitespace-pre-line rounded-lg bg-red-50 p-3 text-sm text-red-600">
                 {error}
               </p>
             )}
 
             <button
               type="submit"
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 font-semibold text-white transition hover:bg-blue-700"
+              disabled={submitting}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-wait disabled:opacity-70"
             >
-              Tạo tài khoản
+              {submitting ? "Đang tạo tài khoản…" : "Tạo tài khoản"}
               <ArrowRight size={18} />
             </button>
           </form>

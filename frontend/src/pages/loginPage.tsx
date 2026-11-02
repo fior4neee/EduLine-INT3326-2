@@ -1,29 +1,43 @@
 
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   GraduationCap,
-  Mail,
+  UserRound,
   LockKeyhole,
   Eye,
   EyeOff,
   ArrowRight,
-  BookOpen,
   CheckCircle2,
 } from "lucide-react";
+import { useAuth } from "../auth/auth-context";
+import { getErrorMessage } from "../services/api";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const location = useLocation();
+  const { login } = useAuth();
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
-    // TODO: Tích hợp POST /api/auth/login
-    // Chưa có backend nên không xác thực hoặc tạo phiên đăng nhập.
-    alert("Giao diện đăng nhập đã sẵn sàng. Chờ kết nối Auth API.");
+    setError("");
+    setSubmitting(true);
+    try {
+      const user = await login(identifier.trim(), password);
+      const from = (location.state as { from?: string } | null)?.from;
+      navigate(from ?? (user.accountType === "Admin" ? "/admin/users" : "/account"), {
+        replace: true,
+      });
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -92,19 +106,22 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="mt-9 space-y-6">
 
             <div>
-              <label htmlFor="login-email" className="mb-2 block text-sm font-semibold text-slate-700">
-                Địa chỉ email
+              <label htmlFor="login-identifier" className="mb-2 block text-sm font-semibold text-slate-700">
+                Tên đăng nhập hoặc email
               </label>
               <div className="relative">
-                <Mail size={19} className="absolute top-1/2 left-4 -translate-y-1/2 text-slate-400" />
+                <UserRound size={19} className="absolute top-1/2 left-4 -translate-y-1/2 text-slate-400" />
                 <input
-                  id="login-email"
-                  type="email"
+                  id="login-identifier"
+                  type="text"
                   required
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  autoComplete="username"
+                  value={identifier}
+                  onChange={(e) => {
+                    setIdentifier(e.target.value);
+                    setError("");
+                  }}
+                  placeholder="nguyenvana hoặc you@example.com"
                   className="h-13 w-full rounded-xl border border-slate-200 bg-white pr-4 pl-12 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
               </div>
@@ -128,7 +145,10 @@ export default function LoginPage() {
                   required
                   autoComplete="current-password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setError("");
+                  }}
                   placeholder="Nhập mật khẩu"
                   className="h-13 w-full rounded-xl border border-slate-200 bg-white pr-12 pl-12 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
@@ -143,11 +163,18 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {error && (
+              <p role="alert" className="whitespace-pre-line rounded-lg bg-red-50 p-3 text-sm text-red-600">
+                {error}
+              </p>
+            )}
+
             <button
               type="submit"
-              className="flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 font-semibold text-white shadow-md shadow-blue-100 transition hover:bg-blue-700"
+              disabled={submitting}
+              className="flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 font-semibold text-white shadow-md shadow-blue-100 transition hover:bg-blue-700 disabled:cursor-wait disabled:opacity-70"
             >
-              Đăng nhập
+              {submitting ? "Đang đăng nhập…" : "Đăng nhập"}
               <ArrowRight size={19} />
             </button>
           </form>
