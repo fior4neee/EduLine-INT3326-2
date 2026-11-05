@@ -602,7 +602,7 @@ These are agreed to be done later. The fields already exist, so no schema change
 | 2 | **Quiz time limit and attempt limit rules.** Decide defaults and how the API enforces them (reject answers after `expiresAt`, reject a new attempt past `maxAttempts`). | `Quiz.timeLimitMinutes`, `Quiz.maxAttempts`, `QuizAttempt.expiresAt`, all optional. Quizzes are untimed and unlimited. |
 | 3 | **Outbox relay** (week 7): publish unpublished `OutboxEvent` rows to Pub/Sub and set `publishedAt`. | Events are already written for `ENROLLMENT_CREATED`, `COURSE_PUBLISHED`, `INSTRUCTOR_REQUEST_DECIDED`, `EMAIL_REQUESTED`. |
 | 4 | **Password reset email template** in the worker (M6) for `EMAIL_REQUESTED` with `template: "password-reset"`. | API side done; set `MAIL_TRANSPORT=outbox` once the worker sends it. |
-| 5 | **Real progress percentage** from M3's progress module. | Placeholder: 100 when Completed, else 0. M3 calls `EnrollmentsService.markCompleted(userId, courseId)` at 100 %. |
+| 5 | ~~Real progress percentage~~ **Done (M3).** `GET /me/courses` and `enrolledCourses` read it from `CourseProgressService`. A Completed enrollment always reads 100. | M3 calls `EnrollmentsService.markCompleted(userId, courseId, tx?)` at 100 %. |
 | 6 | **Tests** (RBAC T01–T31, Jest + Supertest). | Not started; to be planned. |
 
 ---
@@ -651,5 +651,11 @@ Base path `/api/v1`. Full request/response shapes are in Swagger (`/api/docs`). 
 | `DELETE /modules/{id}` | course staff | Deletes its lessons too |
 | `POST /modules/{id}/lessons` | course staff | `{title, type: "Text" \| "Video" \| "Document", textContent?, estimatedDurationMinutes?, isPreview?}` |
 | `DELETE /lessons/{id}` | course staff | |
+| `PUT /lessons/{id}/progress` | Student, Active enrollment | M3. Video heartbeat `{positionSeconds, durationSeconds}` → `{lessonId, lastPositionSeconds, percent, completedAt}` |
+| `POST /lessons/{id}/complete` | Student, Active enrollment | M3. Text and Document lessons only |
+| `GET /lessons/{id}/progress` | anyone who can open the lesson | M3. Zeros if never opened |
+| `GET /courses/{id}/progress/me` | anyone who can view the course content | M3. `{courseId, progressPercentage, completedLessonIds, resumeLessonId}` |
+| `GET /instructor/courses/{id}/analytics` | course staff | M3. Dashboard numbers: see [docs/m3-plan.md](docs/m3-plan.md) §4.5 |
+| `GET /instructor/courses/{id}/analytics/students` | course staff | M3. `?status=&page=&pageSize=` |
 
 "Course staff" = an Instructor listed on the course, or any Admin. Every error has the shape `{ "error": { "code", "message", "details", "requestId" } }`; the `code` values are stable and meant for the frontend to switch on (e.g. `ALREADY_ENROLLED`, `PREREQUISITES_NOT_MET`, `INVALID_COURSE_PASSWORD`).
