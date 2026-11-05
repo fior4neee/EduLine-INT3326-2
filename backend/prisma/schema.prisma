@@ -126,6 +126,7 @@ model User {
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   notifications       Notification[]
+  lessonProgress      LessonProgress[]
 
   @@index([instructorRequestStatus])
   @@map("users")
@@ -197,11 +198,12 @@ model Course {
   prerequisites CoursePrerequisite[] @relation("CourseRequires")
   requiredBy    CoursePrerequisite[] @relation("CourseRequiredBy")
 
-  enrollments Enrollment[]
-  modules     Module[]
-  lessons     Lesson[]
-  quizzes     Quiz[]
-  assignments Assignment[]
+  enrollments    Enrollment[]
+  modules        Module[]
+  lessons        Lesson[]
+  quizzes        Quiz[]
+  assignments    Assignment[]
+  lessonProgress LessonProgress[]
 
   @@index([visibility])
   @@map("courses")
@@ -291,10 +293,11 @@ model Lesson {
   videoKey                 String?    @map("video_key")
   resourceKeys             String[]   @default([]) @map("resource_keys")
 
-  module      Module       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  module      Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  course      Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
   quizzes     Quiz[]
   assignments Assignment[]
+  progress    LessonProgress[]
 
   @@unique([courseId, slug])
   @@index([moduleId, sortOrder])
@@ -376,6 +379,33 @@ model AttemptAnswer {
 
   @@unique([attemptId, questionId])
   @@map("attempt_answers")
+}
+
+// ─── Learning progress (M3) ─────────────────────────────────────────────────
+
+// One row per student per lesson. `updatedAt` doubles as "last activity", so
+// there is no separate event log table.
+model LessonProgress {
+  userId              String    @map("user_id") @db.Uuid
+  lessonId            Int       @map("lesson_id")
+  // Copied from the lesson so course progress is one query on (courseId, userId).
+  courseId            Int       @map("course_id")
+  // Resume point; follows the latest heartbeat, even backwards.
+  lastPositionSeconds Int       @default(0) @map("last_position_seconds")
+  // 0–100, never decreases.
+  percent             Int       @default(0)
+  // Set once, when the lesson's completion rule is first met.
+  completedAt         DateTime? @map("completed_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([userId, lessonId])
+  @@index([courseId, userId])
+  @@index([courseId, updatedAt])
+  @@map("lesson_progress")
 }
 
 // ─── Assignments ────────────────────────────────────────────────────────────

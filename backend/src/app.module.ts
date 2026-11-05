@@ -14,11 +14,13 @@ import { UserThrottlerGuard } from './common/guards/user-throttler.guard';
 import { MailModule } from './common/mail/mail.module';
 import { EventsModule } from './events/events.module';
 import { AccessPolicyModule } from './modules/access/access-policy.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ContentModule } from './modules/content/content.module';
 import { CoursesModule } from './modules/courses/courses.module';
 import { EnrollmentsModule } from './modules/enrollments/enrollments.module';
 import { HealthModule } from './modules/health/health.module';
+import { ProgressModule } from './modules/progress/progress.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -57,6 +59,8 @@ import { UsersModule } from './modules/users/users.module';
     CoursesModule,
     EnrollmentsModule,
     ContentModule,
+    ProgressModule,
+    AnalyticsModule,
   ],
   providers: [
     // Order matters: authenticate, then check role, then rate limit per user.

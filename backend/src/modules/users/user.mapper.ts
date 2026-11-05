@@ -6,12 +6,16 @@ export interface EnrolledCourseSummary {
   status: EnrollmentStatus;
   enrolledAt: Date;
   completedAt: Date | null;
+  // From M3's CourseProgressService. Absent means not started.
+  progressPercentage?: number;
 }
 
-// Placeholder until M3's progress module exists: 100 when the course is
-// Completed, otherwise 0. Replace with ProgressService when it lands.
-export function progressPercentage(e: Pick<EnrolledCourseSummary, 'status'>): number {
-  return e.status === 'Completed' ? 100 : 0;
+// A Completed enrollment always reads 100, even if the instructor has added
+// lessons since. Otherwise the share of lessons the student has finished.
+export function progressPercentage(
+  e: Pick<EnrolledCourseSummary, 'status' | 'progressPercentage'>,
+): number {
+  return e.status === 'Completed' ? 100 : (e.progressPercentage ?? 0);
 }
 
 // User object (backend README §3.1). Never includes passwordHash.

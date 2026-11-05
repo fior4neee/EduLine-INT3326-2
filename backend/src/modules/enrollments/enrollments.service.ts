@@ -1,13 +1,14 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Enrollment, Prisma } from '@prisma/client';
 import type { AuthUser } from '../../common/auth/auth-user';
-import { PrismaService } from '../../common/database/prisma.service';
+import { PrismaService, Tx } from '../../common/database/prisma.service';
 import { AppException } from '../../common/errors/app.exception';
 import { toPublicId } from '../../common/ids/public-id';
 import { paginated, PaginationQueryDto, skipTake } from '../../common/pagination/pagination';
 import { OutboxService } from '../../events/outbox.service';
 import { AccessPolicyService } from '../access/access-policy.service';
 import { CoursesService } from '../courses/courses.service';
+import { CourseProgressService } from '../progress/course-progress.service';
 import { EnrolledCourseSummary, progressPercentage, toUserSummary } from '../users/user.mapper';
 import { UsersService } from '../users/users.service';
 import { CourseStudentsQueryDto } from './dto/enrollment.dto';
@@ -25,6 +26,7 @@ export class EnrollmentsService {
     private readonly courses: CoursesService,
     private readonly users: UsersService,
     private readonly outbox: OutboxService,
+    private readonly progress: CourseProgressService,
   ) {}
 
   // ─── Student actions ──────────────────────────────────────────────────────
@@ -138,21 +140,33 @@ export class EnrollmentsService {
       await this.courses.findManyWithLinks(rows.map((e) => e.courseId)),
     );
     const courses = new Map(presented.map((c) => [c.id, c]));
+    const progress = await this.progress.getCourseProgressMap(
+      user.id,
+      rows.map((e) => e.courseId),
+    );
     const data = rows.map((e) => ({
       enrollment: toEnrollmentResponse(e),
       course: courses.get(toPublicId('course', e.courseId))!,
-      progressPercentage: progressPercentage(e),
+      progressPercentage: progressPercentage({
+        status: e.status,
+        progressPercentage: progress.get(e.courseId),
+      }),
     }));
     return paginated(data, total, query);
   }
 
   // Used by /users/me to build enrolledCourses.
-  findSummariesForUser(userId: string): Promise<EnrolledCourseSummary[]> {
-    return this.prisma.enrollment.findMany({
+  async findSummariesForUser(userId: string): Promise<EnrolledCourseSummary[]> {
+    const rows = await this.prisma.enrollment.findMany({
       where: { userId, status: { not: 'Dropped' } },
       orderBy: { enrolledAt: 'desc' },
       select: { courseId: true, status: true, enrolledAt: true, completedAt: true },
     });
+    const progress = await this.progress.getCourseProgressMap(
+      userId,
+      rows.map((e) => e.courseId),
+    );
+    return rows.map((e) => ({ ...e, progressPercentage: progress.get(e.courseId) }));
   }
 
   // ─── Staff actions ────────────────────────────────────────────────────────
@@ -217,8 +231,9 @@ export class EnrollmentsService {
   // ─── For M3's progress module ─────────────────────────────────────────────
 
   // Call when a student's progress reaches 100 %. Safe to call more than once.
-  async markCompleted(userId: string, courseId: number): Promise<void> {
-    await this.prisma.enrollment.updateMany({
+  // Pass the caller's transaction to make it part of that transaction.
+  async markCompleted(userId: string, courseId: number, db: Tx = this.prisma): Promise<void> {
+    await db.enrollment.updateMany({
       where: { userId, courseId, status: 'Active' },
       data: { status: 'Completed', completedAt: new Date() },
     });
