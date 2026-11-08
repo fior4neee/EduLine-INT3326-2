@@ -16,7 +16,8 @@ Sau này: Terraform (GCP), k6 load test scripts.
 
 ## GCP dev environment (M1)
 
-> Trạng thái 2026-11-09: project, API, Cloud SQL, Secret Manager, IAM đã xong. **Chưa deploy Cloud Run.**
+> Trạng thái 2026-11-09: project, API, Cloud SQL, Secret Manager, IAM, migration và Cloud Run `api` đã xong.
+> API: `https://api-ziqtauotba-as.a.run.app/api/v1` (Swagger: `/api/docs`).
 > Không bao giờ commit mật khẩu DB, giá trị secret hay file JSON key (`*-key.json` đã có trong `.gitignore`).
 
 ### Resource
@@ -83,9 +84,25 @@ gcloud secrets get-iam-policy database-url --format="value(bindings.role)"      
 docker build -t eduline-api:local backend
 ```
 
+### Deploy lại
+
+Chạy từ thư mục gốc repo:
+
+```powershell
+gcloud run deploy api --source backend --region asia-southeast1 `
+  --service-account sa-api@gen-lang-client-0192726533.iam.gserviceaccount.com `
+  --add-cloudsql-instances gen-lang-client-0192726533:asia-southeast1:eduline-db `
+  --set-secrets "DATABASE_URL=database-url:latest,JWT_ACCESS_SECRET=jwt-secret:latest" `
+  --set-env-vars "NODE_ENV=production,MAIL_TRANSPORT=outbox,CORS_ORIGINS=http://localhost:5173,FRONTEND_URL=http://localhost:5173" `
+  --min-instances 0 --max-instances 3 --allow-unauthenticated --labels app=eduline
+```
+
+Migration mới: bật `cloud-sql-proxy <connection name> --port 5433 --gcloud-auth`, đặt `DATABASE_URL` trỏ `127.0.0.1:5433` rồi `npm run prisma:deploy` trong `backend/`.
+
 ### Việc tiếp theo
 
-- [ ] Chạy migration lên Cloud SQL qua Auth Proxy (`npm run prisma:deploy`)
-- [ ] Artifact Registry + deploy Cloud Run `api` với `sa-api`, secret và Cloud SQL connector
-- [ ] Smoke test: `/api/v1/health` trả `200 {"status":"ok","database":"up"}`
+- [x] Chạy migration lên Cloud SQL qua Auth Proxy (5 migration) và seed Admin (mật khẩu mạnh, không dùng giá trị trong `.env.example`)
+- [x] Deploy Cloud Run `api` (`--source backend`, Artifact Registry `cloud-run-source-deploy`) với `sa-api`, secret và Cloud SQL connector
+- [x] Smoke test: `/api/v1/health` → `200 {"status":"ok","database":"up"}`
+- [x] RBAC trên cloud: `GET /admin/users` không token → `401`, Student → `403`, Admin → `200`
 - [ ] Pub/Sub topic + dead-letter topic cho worker (tuần 7)
