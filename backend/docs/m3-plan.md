@@ -267,16 +267,36 @@ cd infrastructure && cp -n .env.example .env && docker compose up -d
 docker compose ps                      # eduline-postgres: healthy
 
 # 2. Backend
+## Bash version
 cd ../backend
 cp -n .env.example .env                # đặt JWT_ACCESS_SECRET >= 32 ký tự
 npm ci
 npx prisma migrate deploy
+npx prisma generate
 npm run seed                           # admin / Admin#2026
 npm run seed:demo                      # giảng viên, học viên, 8 khóa demo
 npm run seed:m3                        # khóa có video, bài đọc ViSQuAD và 3 quiz VMLU. Tài khoản m3.student / m3.instructor, mật khẩu Student#2026
 npm run start:dev                      # http://localhost:8000/api/v1
-```
 
+## Powershell Version
+
+# 1. Postgres
+cd C:\GitHub\EduLine-INT3326-2\infrastructure
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+docker compose up -d
+docker compose ps                      # eduline-postgres: healthy
+
+# 2. Backend
+cd ..\backend
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }   # set JWT_ACCESS_SECRET to 32+ characters
+npm ci
+npx prisma migrate deploy
+npm run seed
+npm run seed:demo
+npm run seed:m3
+npm run start:dev                      # http://localhost:8000/api/v1
+
+```
 ### 6.2 Kiểm tra dữ liệu nguồn (chạy được ngay, không cần backend)
 
 ```bash

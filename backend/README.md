@@ -590,6 +590,26 @@ This is the first version of the backend data model. It starts from the M2 objec
 | 45 | Course rules: **publish** needs ≥ 1 lesson, and Restricted also needs a course password (which cannot be removed while Restricted). **Drop** is allowed only from Active. **Suspend** is allowed from Active or Dropped (with `timesEnrolled ≥ 2`, never completed). | Prevents empty courses, and dropping as a way around a suspension. |
 | 46 | Events written to the outbox: `ENROLLMENT_CREATED`, `COURSE_PUBLISHED`, `INSTRUCTOR_REQUEST_DECIDED`, `EMAIL_REQUESTED` (password reset). Published to Pub/Sub once the relay exists (week 7). | ADR-005. |
 
+### Changes by M3 as of 06/11/2026
+
+Full design, test cases and eval results: [docs/m3-plan.md](docs/m3-plan.md).
+
+| # | Change | Reason |
+|---|---|---|
+| 47 | **`LessonProgress`** table added (`lesson_progress`, migration `20261106000000_lesson_progress`): one row per student per lesson, with `lastPositionSeconds`, `percent` (0–100), `completedAt`, and `courseId` copied from the lesson. Key `(userId, lessonId)`; indexes `(courseId, userId)` and `(courseId, updatedAt)`. | M3 owns progress; course progress is one query on `(courseId, userId)`. |
+| 48 | The old ERD's **`progress_events`** table is **not** built. `LessonProgress.updatedAt` serves as "last activity". | Enough for the "active in the last 7 days" metric, with one write per heartbeat. |
+| 49 | **Lesson completion rules:** Video at **≥ 90 %** watched; Text and Document when the student clicks "complete"; Quiz when an attempt has `passed = true`; Assignment when a file is submitted. The last two are triggered by M2 through `ProgressService.markLessonCompleted(ref, tx?)`. | One clear rule per lesson type. |
+| 50 | Video `percent` **never decreases**; the resume point (`lastPositionSeconds`) follows the latest heartbeat, even when rewinding. `completedAt` is set **once**. A position up to 5 s past the video's end is accepted. | Rewinding must not undo progress; video players overshoot slightly. |
+| 51 | **Course progress** = `floor(completed lessons × 100 / total lessons)`, so it reads 100 only when every lesson is done. At 100 % M3 calls `EnrollmentsService.markCompleted`, which gained an optional transaction parameter (`tx`). | The enrollment becomes `Completed` (unlocking prerequisite chains), also from inside M2's quiz submit transaction. |
+| 52 | Only a student with an **Active** enrollment records progress. A `Completed` enrollment can still read its progress but not change it. New error codes: `LESSON_TYPE_NOT_SUPPORTED` (422), `PROGRESS_NOT_ALLOWED` (403), `LESSON_NOT_FOUND` (404), `INVALID_PROGRESS` (400). | Matches change 32 (Completed is read-only). A 404 does not reveal whether a lesson exists. |
+| 53 | **Real `progressPercentage`** in `GET /me/courses` and `enrolledCourses`, from `CourseProgressService.getCourseProgressMap(userId, courseIds)` (two queries for all courses). Replaces the placeholder in `user.mapper.ts`. A Completed enrollment always reads 100. | Closes job 5. Kept apart from `ProgressService` to avoid a circular dependency with `EnrollmentsService`. |
+| 54 | **Progress endpoints:** `PUT /lessons/{id}/progress` (video heartbeat about every 15 s, `{positionSeconds, durationSeconds}`), `POST /lessons/{id}/complete`, `GET /lessons/{id}/progress`, `GET /courses/{id}/progress/me` (`{courseId, progressPercentage, completedLessonIds, resumeLessonId}`). | Week 5 demo: close the browser, log in again, resume where you left off. |
+| 55 | **`ScoringService`**: pure `score(questions, answers)` with no database access. A right answer earns the question's points, wrong or blank earns 0, `maxScore` counts every question, and answers to questions outside the quiz are ignored. `isPassed(score, maxScore, passingScorePercentage)` uses whole numbers only. | quiz-submission-design.md §3: M2 owns the submit transaction; M3 owns the scoring rule. Not called yet (needs M2's quiz API). |
+| 56 | **Instructor analytics:** `GET /instructor/courses/{id}/analytics` (enrollments by status, average progress, completion rate, active students in 7 days, per-quiz attempts/average/pass rate, per-assignment submitted/graded/late) and `GET /instructor/courses/{id}/analytics/students` (paged, max 100). Course staff only, never cached. Percentages are whole numbers, or `null` when there is nothing to measure. | Week 7 instructor dashboard. Per-course personal data is not cached (ADR-006). |
+| 57 | **Jest + Supertest** set up: `npm test` (unit, no database) and `npm run test:int` (integration, refuses to run unless the database name ends in `_test`, because it empties every table). 16 unit and 35 integration tests. | Shared test setup for M2 and M3. |
+| 58 | **Evals and seed:** `npm run eval:scoring` (VMLU questions in `data/`), `eval:progress` (200 replayed heartbeat sequences), `eval:analytics` (every dashboard number vs hand-written SQL). `npm run seed:m3` creates a course with video, ViSQuAD reading lessons and 3 VMLU quizzes (`m3.student` / `m3.instructor`, password `Student#2026`). All three evals passed on 06/11/2026. | Checks the numbers on real data, not only hand-written cases. |
+| 59 | Changes to M2 files: back-relations on `User`, `Course` and `Lesson`; `ProgressModule` and `AnalyticsModule` registered in `app.module.ts`; `tsconfig.json` also type-checks `test/` and `scripts/` (`nest build` still builds only `src/`). | Needed to wire M3's modules in. Needs M2 review before merge. |
+
 ---
 
 ## 6. Jobs for later
@@ -602,8 +622,7 @@ These are agreed to be done later. The fields already exist, so no schema change
 | 2 | **Quiz time limit and attempt limit rules.** Decide defaults and how the API enforces them (reject answers after `expiresAt`, reject a new attempt past `maxAttempts`). | `Quiz.timeLimitMinutes`, `Quiz.maxAttempts`, `QuizAttempt.expiresAt`, all optional. Quizzes are untimed and unlimited. |
 | 3 | **Outbox relay** (week 7): publish unpublished `OutboxEvent` rows to Pub/Sub and set `publishedAt`. | Events are already written for `ENROLLMENT_CREATED`, `COURSE_PUBLISHED`, `INSTRUCTOR_REQUEST_DECIDED`, `EMAIL_REQUESTED`. |
 | 4 | **Password reset email template** in the worker (M6) for `EMAIL_REQUESTED` with `template: "password-reset"`. | API side done; set `MAIL_TRANSPORT=outbox` once the worker sends it. |
-| 5 | ~~Real progress percentage~~ **Done (M3).** `GET /me/courses` and `enrolledCourses` read it from `CourseProgressService`. A Completed enrollment always reads 100. | M3 calls `EnrollmentsService.markCompleted(userId, courseId, tx?)` at 100 %. |
-| 6 | **Tests** (RBAC T01–T31, Jest + Supertest). | Not started; to be planned. |
+| 5 | **RBAC tests** T01–T31 for M2's endpoints. | Jest + Supertest are set up (change 57), with M3's progress, scoring and analytics tests. No M2 tests yet. |
 
 ---
 
