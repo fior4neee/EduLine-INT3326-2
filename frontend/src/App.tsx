@@ -10,9 +10,13 @@ import AdminUsersPage from "./pages/adminUsersPage";
 import RequireAuth from "./auth/RequireAuth";
 import CoursesPage from "./pages/coursesPage";
 import CourseDetailPage from "./pages/courseDetailPage";
+import LessonPage from "./pages/lessonPage";
 import MyCoursesPage from "./pages/myCoursesPage";
 import InstructorCoursesPage from "./pages/instructorCoursesPage";
 import InstructorCourseManagePage from "./pages/instructorCourseManagePage";
+import NotificationsPage from "./pages/notificationsPage";
+import GradebookPage from "./pages/gradebookPage";
+import StudentDashboardPage from "./pages/studentDashboardPage";
 
 function HomePage() {
   return (
@@ -49,6 +53,15 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/courses" element={<CoursesPage />} />
           <Route path="/courses/:idOrSlug" element={<CourseDetailPage />} />
+          <Route path="/courses/:idOrSlug/lessons/:lessonId" element={<LessonPage />} />
+          <Route
+            path="/dashboard"
+            element={
+              <RequireAuth roles={["Student"]}>
+                <StudentDashboardPage />
+              </RequireAuth>
+            }
+          />
           <Route
             path="/my-courses"
             element={
@@ -70,6 +83,22 @@ export default function App() {
             element={
               <RequireAuth roles={["Instructor", "Admin"]}>
                 <InstructorCourseManagePage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <RequireAuth>
+                <NotificationsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/instructor/assignments/:assignmentId"
+            element={
+              <RequireAuth roles={["Instructor", "Admin"]}>
+                <GradebookPage />
               </RequireAuth>
             }
           />

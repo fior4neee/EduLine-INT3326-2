@@ -1,0 +1,81 @@
+{
+  "slug": "mang-may-tinh-can-ban",
+  "title": "Mạng máy tính căn bản",
+  "shortSummary": "Hiểu cách các máy tính trao đổi dữ liệu: mô hình OSI và TCP/IP, đóng gói dữ liệu, địa chỉ IP và thiết bị mạng.",
+  "category": "Mạng máy tính",
+  "difficultyLevel": "College",
+  "instructor": "bao.le",
+  "thumbnailUrl": "/images/courses/mang-may-tinh-can-ban.svg",
+  "hasCertificate": true,
+  "welcomeMessage": "Chào mừng bạn đến với khóa Mạng máy tính căn bản! Hãy bắt đầu từ chương 1 và làm bài kiểm tra ở cuối khóa.",
+  "vmluSubject": "13",
+  "sources": [
+    {
+      "title": "Computer Networking: Principles, Protocols and Practice",
+      "author": "Olivier Bonaventure",
+      "url": "https://www.computer-networking.info/",
+      "license": "CC BY 3.0"
+    }
+  ],
+  "modules": [
+    {
+      "title": "Chương 1: Tổng quan về mạng máy tính",
+      "lessons": [
+        { "title": "Video: Mạng máy tính quanh ta", "type": "Video", "minutes": 8, "isPreview": true },
+        {
+          "title": "Mạng máy tính là gì?",
+          "type": "Text",
+          "minutes": 10,
+          "text": "Mạng máy tính là tập hợp các thiết bị (máy tính, điện thoại, máy in, máy chủ...) được nối với nhau để chia sẻ dữ liệu và tài nguyên.\n\nPhân loại theo phạm vi địa lý:\n• LAN (Local Area Network): mạng cục bộ trong một tòa nhà, trường học, văn phòng.\n• MAN (Metropolitan Area Network): mạng trong phạm vi một thành phố.\n• WAN (Wide Area Network): mạng diện rộng, nối nhiều quốc gia. Internet là WAN lớn nhất.\n\nCấu trúc liên kết (topology) phổ biến:\n• Bus: mọi máy nối vào một đường cáp chung. Đứt cáp chính thì cả mạng ngừng.\n• Star (hình sao): mọi máy nối về một thiết bị trung tâm (switch). Dễ mở rộng, phổ biến nhất hiện nay.\n• Ring (vòng): các máy nối thành vòng khép kín, dữ liệu đi theo một chiều.\n• Mesh (lưới): các máy nối với nhau bằng nhiều đường, có khả năng dự phòng cao.\n\nMô hình hoạt động:\n• Client–server: máy khách gửi yêu cầu, máy chủ phục vụ (ví dụ trình duyệt và web server).\n• Peer-to-peer (P2P): các máy ngang hàng, vừa là khách vừa là chủ."
+        },
+        {
+          "title": "Giao thức và kiến trúc phân tầng",
+          "type": "Text",
+          "minutes": 10,
+          "text": "Giao thức (protocol) là tập quy tắc mà các bên phải tuân theo khi trao đổi dữ liệu. Một giao thức quy định:\n• Định dạng của thông điệp.\n• Thứ tự gửi và nhận thông điệp.\n• Hành động cần làm khi nhận được thông điệp hoặc khi có lỗi.\n\nVí dụ: HTTP (web), SMTP (gửi thư), DNS (phân giải tên miền), TCP, UDP, IP.\n\nVì sao cần phân tầng?\nTruyền dữ liệu qua mạng là bài toán rất phức tạp. Người ta chia nó thành nhiều tầng, mỗi tầng giải quyết một phần việc và chỉ cung cấp dịch vụ cho tầng ngay trên nó. Nhờ vậy:\n• Mỗi tầng có thể thay đổi cách làm mà không ảnh hưởng các tầng khác.\n• Thiết bị và phần mềm của nhiều hãng khác nhau vẫn làm việc được với nhau.\n\nHai mô hình phân tầng quan trọng là mô hình tham chiếu OSI (7 tầng) của ISO và mô hình TCP/IP (4 tầng) mà Internet đang dùng."
+        }
+      ]
+    },
+    {
+      "title": "Chương 2: Mô hình OSI và TCP/IP",
+      "lessons": [
+        {
+          "title": "Bảy tầng của mô hình OSI",
+          "type": "Text",
+          "minutes": 15,
+          "text": "Mô hình OSI gồm 7 tầng, đánh số từ dưới lên:\n\n1. Vật lý (Physical): truyền các bit 0/1 qua môi trường (cáp đồng, cáp quang, sóng vô tuyến). Quy định điện áp, đầu nối, tốc độ truyền.\n2. Liên kết dữ liệu (Data Link): đóng dữ liệu thành khung (frame), dùng địa chỉ MAC để truyền giữa hai nút kề nhau, phát hiện lỗi. Switch làm việc ở tầng này.\n3. Mạng (Network): tạo gói tin (packet), đánh địa chỉ logic (IP) và chọn đường đi (định tuyến) qua nhiều mạng. Router làm việc ở tầng này.\n4. Giao vận (Transport): truyền dữ liệu giữa hai tiến trình đầu cuối, chia dữ liệu thành đoạn (segment). TCP đảm bảo tin cậy, đúng thứ tự; UDP nhanh nhưng không đảm bảo.\n5. Phiên (Session): thiết lập, duy trì và kết thúc phiên làm việc giữa hai ứng dụng.\n6. Trình diễn (Presentation): chuyển đổi định dạng, mã hóa, nén dữ liệu.\n7. Ứng dụng (Application): giao tiếp trực tiếp với người dùng qua các giao thức như HTTP, FTP, SMTP, DNS.\n\nMẹo nhớ từ tầng 1 lên tầng 7: \"Please Do Not Throw Sausage Pizza Away\"."
+        },
+        {
+          "title": "Đóng gói dữ liệu (encapsulation)",
+          "type": "Text",
+          "minutes": 10,
+          "text": "Khi gửi dữ liệu, mỗi tầng thêm phần thông tin điều khiển (header) của mình vào dữ liệu nhận từ tầng trên. Quá trình này gọi là đóng gói.\n\nTên gọi đơn vị dữ liệu (PDU) ở từng tầng theo thứ tự đóng gói:\n• Tầng ứng dụng: Data (dữ liệu)\n• Tầng giao vận: Segment (đoạn), thêm số cổng nguồn/đích\n• Tầng mạng: Packet (gói tin), thêm địa chỉ IP nguồn/đích\n• Tầng liên kết dữ liệu: Frame (khung), thêm địa chỉ MAC và phần kiểm tra lỗi\n• Tầng vật lý: Bit\n\nThứ tự đúng: Data → Segment → Packet → Frame → Bit.\n\nỞ phía nhận, quá trình diễn ra ngược lại (mở gói, de-encapsulation): mỗi tầng đọc và gỡ header của mình rồi chuyển phần còn lại lên tầng trên, cho tới khi ứng dụng nhận được dữ liệu ban đầu."
+        },
+        {
+          "title": "Mô hình TCP/IP",
+          "type": "Text",
+          "minutes": 10,
+          "text": "Mô hình TCP/IP là mô hình thực tế của Internet, gồm 4 tầng:\n\n1. Truy cập mạng (Network Access/Link): tương ứng tầng 1 và 2 của OSI. Ví dụ Ethernet, Wi-Fi.\n2. Internet: tương ứng tầng 3 của OSI. Giao thức chính là IP, cùng ICMP (dùng cho lệnh ping) và ARP (tìm địa chỉ MAC từ địa chỉ IP).\n3. Giao vận (Transport): tương ứng tầng 4. Gồm TCP và UDP.\n4. Ứng dụng (Application): gộp tầng 5, 6, 7 của OSI. Ví dụ HTTP/HTTPS, DNS, SMTP, FTP, SSH.\n\nSo sánh TCP và UDP:\n• TCP: hướng kết nối (bắt tay 3 bước), có xác nhận, gửi lại khi mất gói, đảm bảo đúng thứ tự. Dùng cho web, email, truyền file.\n• UDP: không kết nối, không xác nhận, độ trễ thấp. Dùng cho gọi video, game trực tuyến, DNS.\n\nMột số cổng thông dụng: HTTP 80, HTTPS 443, DNS 53, SMTP 25, FTP 21, SSH 22."
+        }
+      ]
+    },
+    {
+      "title": "Chương 3: Địa chỉ, thiết bị mạng và ôn tập",
+      "lessons": [
+        {
+          "title": "Địa chỉ IP và mặt nạ mạng con",
+          "type": "Text",
+          "minutes": 15,
+          "text": "Địa chỉ IPv4 dài 32 bit, viết thành 4 số thập phân từ 0 đến 255, ví dụ 192.168.1.10.\n\nMỗi địa chỉ gồm hai phần: phần mạng (network) và phần máy (host). Mặt nạ mạng con (subnet mask) cho biết bao nhiêu bit đầu là phần mạng. Ví dụ 255.255.255.0, viết gọn là /24, nghĩa là 24 bit đầu là phần mạng.\n\nCác lớp địa chỉ truyền thống (theo số đầu tiên):\n• Lớp A: 1–126, mặt nạ mặc định 255.0.0.0\n• Lớp B: 128–191, mặt nạ mặc định 255.255.0.0\n• Lớp C: 192–223, mặt nạ mặc định 255.255.255.0\n• Lớp D (224–239) dùng cho multicast, lớp E dành cho nghiên cứu.\n• 127.x.x.x là địa chỉ loopback (máy tự gọi chính nó).\n\nDải địa chỉ riêng (dùng trong mạng nội bộ, không định tuyến trên Internet): 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16.\n\nVới mạng /24: có 2^8 = 256 địa chỉ, trừ địa chỉ mạng và địa chỉ quảng bá (broadcast) còn 254 địa chỉ dùng cho máy.\n\nIPv6 dài 128 bit, viết bằng hệ 16, ra đời để giải quyết tình trạng cạn kiệt địa chỉ IPv4."
+        },
+        {
+          "title": "Các thiết bị mạng",
+          "type": "Text",
+          "minutes": 10,
+          "text": "Mỗi thiết bị mạng hoạt động chủ yếu ở một tầng của mô hình OSI:\n\n• Repeater (bộ lặp) – tầng 1: khuếch đại tín hiệu để kéo dài khoảng cách truyền.\n• Hub – tầng 1: nhận tín hiệu ở một cổng và phát ra tất cả các cổng còn lại. Mọi máy chung một miền đụng độ.\n• Bridge (cầu nối) – tầng 2: nối hai đoạn mạng, lọc khung dựa trên địa chỉ MAC.\n• Switch (bộ chuyển mạch) – tầng 2: học địa chỉ MAC của các máy và chỉ chuyển khung tới đúng cổng đích. Mỗi cổng là một miền đụng độ riêng.\n• Router (bộ định tuyến) – tầng 3: nối các mạng khác nhau, chọn đường đi cho gói tin dựa trên địa chỉ IP và bảng định tuyến. Router chia tách các miền quảng bá.\n• Gateway (cổng nối): chuyển đổi giữa các mạng dùng giao thức khác nhau, có thể hoạt động ở nhiều tầng.\n• Access point (điểm truy cập không dây): cho phép thiết bị Wi-Fi tham gia vào mạng LAN có dây.\n\nTrong mạng gia đình, \"modem Wi-Fi\" thường là một thiết bị gộp cả router, switch và access point."
+        },
+        { "title": "Bài kiểm tra cuối khóa (VMLU)", "type": "Quiz", "minutes": 20, "quizTitle": "Kiểm tra: Mạng máy tính căn bản" }
+      ]
+    }
+  ]
+}

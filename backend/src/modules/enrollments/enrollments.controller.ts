@@ -25,7 +25,9 @@ export class EnrollmentsController {
     @IdParam('id', 'course') courseId: number,
     @Body() dto: EnrollDto,
   ) {
-    return toEnrollmentResponse(await this.enrollments.enroll(user, courseId, dto.coursePassword));
+    return toEnrollmentResponse(
+      await this.enrollments.enroll(user, courseId, dto.coursePassword, dto.notifications),
+    );
   }
 
   @Roles('Student')

@@ -30,7 +30,8 @@ export class AuthController {
     return this.auth.login(dto);
   }
 
-  @AuthRateLimit()
+  // Default limit only: every page load restores the session through here, and
+  // refresh tokens are 256-bit random values that cannot be guessed.
   @Post('refresh')
   @HttpCode(200)
   refresh(@Body() dto: RefreshTokenDto) {

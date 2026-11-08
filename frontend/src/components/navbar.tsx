@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../auth/auth-context";
 import { ROLE_LABEL } from "../lib/roles";
+import NotificationBell from "./notificationBell";
 
 const navItems = [
   { label: "Trang chủ", path: "/" },
@@ -94,6 +95,13 @@ export default function Navbar() {
           />
         </form>
 
+        {/* One bell for every screen size, so the unread count is polled once. */}
+        {user && (
+          <div className="ml-auto md:ml-0">
+            <NotificationBell />
+          </div>
+        )}
+
         {/* Authentication */}
         {user ? (
           <div className="hidden shrink-0 items-center gap-3 md:flex">
@@ -103,6 +111,14 @@ export default function Navbar() {
                 className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-50"
               >
                 <ShieldCheck size={17} /> Quản trị
+              </Link>
+            )}
+            {user.accountType === "Student" && (
+              <Link
+                to="/dashboard"
+                className="whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                Bảng điều khiển
               </Link>
             )}
             <Link
@@ -203,6 +219,15 @@ export default function Navbar() {
                   className="rounded-xl border border-violet-200 py-3 text-center text-sm font-semibold text-violet-700"
                 >
                   Quản trị người dùng
+                </Link>
+              )}
+              {user.accountType === "Student" && (
+                <Link
+                  to="/dashboard"
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-xl bg-blue-50 py-3 text-center text-sm font-semibold text-blue-700"
+                >
+                  Bảng điều khiển
                 </Link>
               )}
               <Link

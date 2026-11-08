@@ -33,10 +33,42 @@ cd infrastructure && docker compose up -d      # PostgreSQL on :5432
 cd ../backend
 cp .env.example .env                            # then set JWT_ACCESS_SECRET to 32+ random characters
 npm install
+npx prisma generate
 npx prisma migrate deploy                       # create the tables
 npm run seed                                    # create the Admin account (admin / Admin#2026)
 npm run seed:demo                               # optional: demo instructors, student and 8 courses
+npm run seed:catalog                            # optional: 5 VMLU-topic courses from data/courses/*.json
 npm run start:dev                               # http://localhost:8000/api/v1
+
+### Powershell
+
+# Move to infrastructure and start the PostgreSQL container
+cd infrastructure
+docker compose up -d
+
+# Move to the backend folder and copy the environment template
+cd ../backend
+Copy-Item .env.example .env
+
+# Open .env in Notepad to manually set JWT_ACCESS_SECRET (32+ random characters)
+notepad .env
+
+# Install dependencies and set up the database
+npm install
+npx prisma generate
+npx prisma migrate deploy
+npm run seed
+
+# Optional: Add demo instructors, student, and 8 courses
+npm run seed:demo
+
+# Optional: Add 5 courses (C, networking, statistics, macroeconomics, Vietnamese culture) with VMLU quizzes
+npm run seed:catalog
+
+# Start the application in development mode
+npm run start:dev
+
+
 ```
 
 - Swagger: http://localhost:8000/api/docs · health check: `GET /api/v1/health`
@@ -590,6 +622,35 @@ This is the first version of the backend data model. It starts from the M2 objec
 | 45 | Course rules: **publish** needs ≥ 1 lesson, and Restricted also needs a course password (which cannot be removed while Restricted). **Drop** is allowed only from Active. **Suspend** is allowed from Active or Dropped (with `timesEnrolled ≥ 2`, never completed). | Prevents empty courses, and dropping as a way around a suspension. |
 | 46 | Events written to the outbox: `ENROLLMENT_CREATED`, `COURSE_PUBLISHED`, `INSTRUCTOR_REQUEST_DECIDED`, `EMAIL_REQUESTED` (password reset). Published to Pub/Sub once the relay exists (week 7). | ADR-005. |
 
+### Changes by M3 as of 06/11/2026
+
+Full design, test cases and eval results: [docs/m3-plan.md](docs/m3-plan.md).
+
+| # | Change | Reason |
+|---|---|---|
+| 47 | **`LessonProgress`** table added (`lesson_progress`, migration `20261106000000_lesson_progress`): one row per student per lesson, with `lastPositionSeconds`, `percent` (0–100), `completedAt`, and `courseId` copied from the lesson. Key `(userId, lessonId)`; indexes `(courseId, userId)` and `(courseId, updatedAt)`. | M3 owns progress; course progress is one query on `(courseId, userId)`. |
+| 48 | The old ERD's **`progress_events`** table is **not** built. `LessonProgress.updatedAt` serves as "last activity". | Enough for the "active in the last 7 days" metric, with one write per heartbeat. |
+| 49 | **Lesson completion rules:** Video at **≥ 90 %** watched; Text and Document when the student clicks "complete"; Quiz when an attempt has `passed = true`; Assignment when a file is submitted. The last two are triggered by M2 through `ProgressService.markLessonCompleted(ref, tx?)`. | One clear rule per lesson type. |
+| 50 | Video `percent` **never decreases**; the resume point (`lastPositionSeconds`) follows the latest heartbeat, even when rewinding. `completedAt` is set **once**. A position up to 5 s past the video's end is accepted. | Rewinding must not undo progress; video players overshoot slightly. |
+| 51 | **Course progress** = `floor(completed lessons × 100 / total lessons)`, so it reads 100 only when every lesson is done. At 100 % M3 calls `EnrollmentsService.markCompleted`, which gained an optional transaction parameter (`tx`). | The enrollment becomes `Completed` (unlocking prerequisite chains), also from inside M2's quiz submit transaction. |
+| 52 | Only a student with an **Active** enrollment records progress. A `Completed` enrollment can still read its progress but not change it. New error codes: `LESSON_TYPE_NOT_SUPPORTED` (422), `PROGRESS_NOT_ALLOWED` (403), `LESSON_NOT_FOUND` (404), `INVALID_PROGRESS` (400). | Matches change 32 (Completed is read-only). A 404 does not reveal whether a lesson exists. |
+| 53 | **Real `progressPercentage`** in `GET /me/courses` and `enrolledCourses`, from `CourseProgressService.getCourseProgressMap(userId, courseIds)` (two queries for all courses). Replaces the placeholder in `user.mapper.ts`. A Completed enrollment always reads 100. | Closes job 5. Kept apart from `ProgressService` to avoid a circular dependency with `EnrollmentsService`. |
+| 54 | **Progress endpoints:** `PUT /lessons/{id}/progress` (video heartbeat about every 15 s, `{positionSeconds, durationSeconds}`), `POST /lessons/{id}/complete`, `GET /lessons/{id}/progress`, `GET /courses/{id}/progress/me` (`{courseId, progressPercentage, completedLessonIds, resumeLessonId}`). | Week 5 demo: close the browser, log in again, resume where you left off. |
+| 55 | **`ScoringService`**: pure `score(questions, answers)` with no database access. A right answer earns the question's points, wrong or blank earns 0, `maxScore` counts every question, and answers to questions outside the quiz are ignored. `isPassed(score, maxScore, passingScorePercentage)` uses whole numbers only. | quiz-submission-design.md §3: M2 owns the submit transaction; M3 owns the scoring rule. Not called yet (needs M2's quiz API). |
+| 56 | **Instructor analytics:** `GET /instructor/courses/{id}/analytics` (enrollments by status, average progress, completion rate, active students in 7 days, per-quiz attempts/average/pass rate, per-assignment submitted/graded/late) and `GET /instructor/courses/{id}/analytics/students` (paged, max 100). Course staff only, never cached. Percentages are whole numbers, or `null` when there is nothing to measure. | Week 7 instructor dashboard. Per-course personal data is not cached (ADR-006). |
+| 57 | **Jest + Supertest** set up: `npm test` (unit, no database) and `npm run test:int` (integration, refuses to run unless the database name ends in `_test`, because it empties every table). 16 unit and 35 integration tests. | Shared test setup for M2 and M3. |
+| 58 | **Evals and seed:** `npm run eval:scoring` (VMLU questions in `data/`), `eval:progress` (200 replayed heartbeat sequences), `eval:analytics` (every dashboard number vs hand-written SQL). `npm run seed:m3` creates a course with video, ViSQuAD reading lessons and 3 VMLU quizzes (`m3.student` / `m3.instructor`, password `Student#2026`). All three evals passed on 06/11/2026. | Checks the numbers on real data, not only hand-written cases. |
+| 59 | Changes to M2 files: back-relations on `User`, `Course` and `Lesson`; `ProgressModule` and `AnalyticsModule` registered in `app.module.ts`; `tsconfig.json` also type-checks `test/` and `scripts/` (`nest build` still builds only `src/`). | Needed to wire M3's modules in. Needs M2 review before merge. |
+
+### Changes as of 08/11/2026
+
+| # | Change | Reason |
+|---|---|---|
+| 60 | **Who records progress (confirmed):** only a Student with an **Active** enrollment in a course that is currently published (Public or Restricted). Preview viewers, course staff, Completed enrollments and Archived courses can open lessons but their progress is not saved (`403 PROGRESS_NOT_ALLOWED`). The enrollment window only controls enrolling, not studying. | Team decision. Matches change 32 and M3's code; docs/m3-plan.md §4.2 corrected. |
+| 61 | **Lesson viewer:** `GET /lessons/{id}` returns the lesson with `textContent`, `videoUrl` and `downloadableResources`. 404 `LESSON_NOT_FOUND` when the course is hidden from the caller, 403 `LESSON_LOCKED` (and no URLs) when the course is visible but the caller may not open the lesson. Public route, so preview lessons open without logging in. | Week 4: students open lessons; the frontend lesson page records progress through M3's endpoints. |
+| 62 | **`DEV_SAMPLE_VIDEO_URL`:** until the media service signs real uploads, a Video lesson without a file plays this public sample (outside production only, `isSampleVideo: true`). Nothing is stored as a URL. | Progress can be tested end to end before uploads exist. |
+| 63 | **Deleting a lesson or module** deletes students' progress on it (ON DELETE CASCADE) and, in the same transaction, re-checks the course: Active students who have now finished every remaining lesson become **Completed** (`ProgressService.recheckCourseCompletion`, `EnrollmentsService.markCompletedMany`). A course left with no lessons completes nobody. Adding lessons never un-completes anyone. | Same approach as Coursera, Khan Academy and Moodle: progress is measured against the course as it is now, and a finished course stays finished. |
+
 ---
 
 ## 6. Jobs for later
@@ -602,8 +663,7 @@ These are agreed to be done later. The fields already exist, so no schema change
 | 2 | **Quiz time limit and attempt limit rules.** Decide defaults and how the API enforces them (reject answers after `expiresAt`, reject a new attempt past `maxAttempts`). | `Quiz.timeLimitMinutes`, `Quiz.maxAttempts`, `QuizAttempt.expiresAt`, all optional. Quizzes are untimed and unlimited. |
 | 3 | **Outbox relay** (week 7): publish unpublished `OutboxEvent` rows to Pub/Sub and set `publishedAt`. | Events are already written for `ENROLLMENT_CREATED`, `COURSE_PUBLISHED`, `INSTRUCTOR_REQUEST_DECIDED`, `EMAIL_REQUESTED`. |
 | 4 | **Password reset email template** in the worker (M6) for `EMAIL_REQUESTED` with `template: "password-reset"`. | API side done; set `MAIL_TRANSPORT=outbox` once the worker sends it. |
-| 5 | **Real progress percentage** from M3's progress module. | Placeholder: 100 when Completed, else 0. M3 calls `EnrollmentsService.markCompleted(userId, courseId)` at 100 %. |
-| 6 | **Tests** (RBAC T01–T31, Jest + Supertest). | Not started; to be planned. |
+| 5 | **RBAC tests** T01–T31 for M2's endpoints. | Jest + Supertest are set up (change 57), with M3's progress, scoring and analytics tests. No M2 tests yet. |
 
 ---
 
@@ -651,5 +711,12 @@ Base path `/api/v1`. Full request/response shapes are in Swagger (`/api/docs`). 
 | `DELETE /modules/{id}` | course staff | Deletes its lessons too |
 | `POST /modules/{id}/lessons` | course staff | `{title, type: "Text" \| "Video" \| "Document", textContent?, estimatedDurationMinutes?, isPreview?}` |
 | `DELETE /lessons/{id}` | course staff | |
+| `GET /lessons/{id}` | enrolled (Active/Completed), course staff, or anyone for a preview lesson | Lesson viewer: `textContent`, `videoUrl` (signed; dev sample until uploads exist), `downloadableResources` |
+| `PUT /lessons/{id}/progress` | Student, Active enrollment | M3. Video heartbeat `{positionSeconds, durationSeconds}` → `{lessonId, lastPositionSeconds, percent, completedAt}` |
+| `POST /lessons/{id}/complete` | Student, Active enrollment | M3. Text and Document lessons only |
+| `GET /lessons/{id}/progress` | anyone who can open the lesson | M3. Zeros if never opened |
+| `GET /courses/{id}/progress/me` | anyone who can view the course content | M3. `{courseId, progressPercentage, completedLessonIds, resumeLessonId}` |
+| `GET /instructor/courses/{id}/analytics` | course staff | M3. Dashboard numbers: see [docs/m3-plan.md](docs/m3-plan.md) §4.5 |
+| `GET /instructor/courses/{id}/analytics/students` | course staff | M3. `?status=&page=&pageSize=` |
 
 "Course staff" = an Instructor listed on the course, or any Admin. Every error has the shape `{ "error": { "code", "message", "details", "requestId" } }`; the `code` values are stable and meant for the frontend to switch on (e.g. `ALREADY_ENROLLED`, `PREREQUISITES_NOT_MET`, `INVALID_COURSE_PASSWORD`).

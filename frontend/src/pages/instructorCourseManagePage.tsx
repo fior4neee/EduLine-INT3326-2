@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { Archive, Eye, Globe, KeyRound, Lock, Plus, Trash2 } from "lucide-react";
+import { Archive, ClipboardList, Eye, Globe, KeyRound, Lock, MessageSquareHeart, Plus, Trash2 } from "lucide-react";
 import {
   ENROLLMENT_BADGE,
   ENROLLMENT_LABEL,
@@ -25,6 +25,16 @@ import {
   type CourseStudent,
   type LessonInput,
 } from "../services/courses";
+import {
+  createAssignment,
+  formatDateTime,
+  fromLocalInput,
+  listCourseAssignments,
+  publishAssignment,
+  type Assignment,
+  type AssignmentInput,
+  type SubmissionType,
+} from "../services/assignments";
 
 const inputClass =
   "h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-500";
@@ -39,10 +49,16 @@ export default function InstructorCourseManagePage() {
   const [busy, setBusy] = useState(false);
   const [password, setPassword] = useState("");
   const [moduleTitle, setModuleTitle] = useState("");
+  const [assignments, setAssignments] = useState<Map<string, Assignment>>(new Map());
+  const [welcome, setWelcome] = useState<string | null>(null);
+  const [addingAssignmentTo, setAddingAssignmentTo] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const [c, s] = await Promise.all([getCourse(courseId), listStudents(courseId)]);
+      const list = await listCourseAssignments(c.id);
+      setAssignments(new Map(list.map((a) => [a.lessonId, a])));
+      setWelcome((w) => w ?? c.welcomeMessage ?? "");
       setCourse(c);
       setStudents(s.data);
     } catch (err) {
@@ -159,6 +175,29 @@ export default function InstructorCourseManagePage() {
         </form>
       </section>
 
+      {/* Welcome message */}
+      <section className="mt-6 rounded-2xl border border-slate-200 p-5">
+        <h2 className="flex items-center gap-2 font-bold text-slate-900"><MessageSquareHeart size={18} /> Lời chào mừng</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Gửi đến mỗi học viên dưới dạng thông báo khi họ đăng ký khóa học. Để trống nếu không cần.
+        </p>
+        <form
+          className="mt-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run(() => updateCourse(course.id, { welcomeMessage: (welcome ?? "").trim() || null }), "Đã lưu lời chào mừng.");
+          }}
+        >
+          <textarea value={welcome ?? ""} onChange={(e) => setWelcome(e.target.value)} rows={3} maxLength={2000}
+            placeholder="Ví dụ: Chào mừng các bạn! Hãy bắt đầu với Chương 1 và đặt câu hỏi bất cứ lúc nào."
+            className="w-full rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-blue-500" />
+          <button type="submit" disabled={busy}
+            className="mt-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+            Lưu lời chào mừng
+          </button>
+        </form>
+      </section>
+
       {/* Outline */}
       <section className="mt-8">
         <h2 className="text-xl font-bold text-slate-900">Nội dung</h2>
@@ -174,10 +213,31 @@ export default function InstructorCourseManagePage() {
                 </button>
               </div>
               <ul className="divide-y divide-slate-100">
-                {m.lessons.map((l) => (
-                  <li key={l.id} className="flex items-center gap-3 px-5 py-2.5 text-sm">
-                    <span className="w-16 text-xs font-semibold text-slate-400">{l.type}</span>
-                    <span className="text-slate-800">{l.title}</span>
+                {m.lessons.map((l) => {
+                  const a = assignments.get(l.id);
+                  return (
+                  <li key={l.id} className="flex flex-wrap items-center gap-3 px-5 py-2.5 text-sm">
+                    <span className="w-16 text-xs font-semibold text-slate-400">{l.type === "Assignment" ? "Bài tập" : l.type}</span>
+                    <Link to={`/courses/${course.slug}/lessons/${l.id}`} className="text-slate-800 hover:text-blue-600 hover:underline">{l.title}</Link>
+                    {a && (
+                      <>
+                        <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${a.isPublished ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                          {a.isPublished ? "Đã đăng" : "Nháp"}
+                        </span>
+                        <span className="text-xs text-slate-500">Hạn {formatDateTime(a.dueAt)}</span>
+                        {!a.isPublished && (
+                          <button type="button" disabled={busy}
+                            onClick={() => run(() => publishAssignment(a.id), "Đã đăng bài tập. Học viên sẽ nhận được thông báo.")}
+                            className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700">
+                            Đăng
+                          </button>
+                        )}
+                        <Link to={`/instructor/assignments/${a.id}`}
+                          className="rounded-lg bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 hover:bg-violet-100">
+                          Chấm bài
+                        </Link>
+                      </>
+                    )}
                     {l.isPreview && (
                       <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">Học thử</span>
                     )}
@@ -190,9 +250,27 @@ export default function InstructorCourseManagePage() {
                       <Trash2 size={14} />
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
               <AddLessonForm busy={busy} onAdd={(input) => run(() => createLesson(m.id, input), "Đã thêm bài học.")} />
+              {addingAssignmentTo === m.id ? (
+                <AddAssignmentForm
+                  busy={busy}
+                  onCancel={() => setAddingAssignmentTo(null)}
+                  onAdd={(input) =>
+                    run(async () => {
+                      await createAssignment(m.id, input);
+                      setAddingAssignmentTo(null);
+                    }, "Đã tạo bài tập (bản nháp). Bấm “Đăng” để giao cho học viên.")
+                  }
+                />
+              ) : (
+                <button type="button" onClick={() => setAddingAssignmentTo(m.id)}
+                  className="flex w-full items-center gap-1.5 border-t border-slate-100 px-5 py-3 text-xs font-semibold text-violet-700 hover:bg-violet-50">
+                  <ClipboardList size={14} /> Thêm bài tập
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -303,6 +381,98 @@ function AddLessonForm({ busy, onAdd }: { busy: boolean; onAdd: (input: LessonIn
         className="inline-flex items-center gap-1 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-60">
         <Plus size={14} /> Thêm bài
       </button>
+    </form>
+  );
+}
+
+// New assignment: title, instructions, due date, points, accepted submission
+// types and file extensions, "available from", and whether late work is accepted.
+function AddAssignmentForm({
+  busy,
+  onAdd,
+  onCancel,
+}: {
+  busy: boolean;
+  onAdd: (input: AssignmentInput) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [dueAt, setDueAt] = useState("");
+  const [unlockAt, setUnlockAt] = useState("");
+  const [maxPoints, setMaxPoints] = useState("100");
+  const [types, setTypes] = useState<SubmissionType[]>(["TextEntry", "FileUpload"]);
+  const [extensions, setExtensions] = useState("");
+  const [allowLate, setAllowLate] = useState(true);
+
+  const toggleType = (t: SubmissionType) =>
+    setTypes((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
+  const field = "rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500";
+
+  return (
+    <form
+      className="space-y-3 border-t border-slate-100 bg-violet-50/40 px-5 py-4"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        await onAdd({
+          title: title.trim(),
+          instructions,
+          maxPoints: Number(maxPoints),
+          submissionTypes: types,
+          allowedExtensions: extensions.split(",").map((x) => x.trim()).filter(Boolean),
+          dueAt: fromLocalInput(dueAt),
+          unlockAt: fromLocalInput(unlockAt),
+          allowLateSubmissions: allowLate,
+        });
+      }}
+    >
+      <p className="text-sm font-bold text-violet-900">Bài tập mới</p>
+      <input required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)}
+        placeholder="Tên bài tập" aria-label="Tên bài tập" className={`${field} w-full`} />
+      <textarea required maxLength={20000} rows={4} value={instructions} onChange={(e) => setInstructions(e.target.value)}
+        placeholder="Mô tả / yêu cầu bài tập" aria-label="Mô tả bài tập" className={`${field} w-full`} />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <label className="text-xs font-semibold text-slate-600">
+          Hạn nộp
+          <input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} className={`${field} mt-1 w-full`} />
+        </label>
+        <label className="text-xs font-semibold text-slate-600">
+          Mở từ (tùy chọn)
+          <input type="datetime-local" value={unlockAt} onChange={(e) => setUnlockAt(e.target.value)} className={`${field} mt-1 w-full`} />
+        </label>
+        <label className="text-xs font-semibold text-slate-600">
+          Điểm tối đa
+          <input type="number" min={0} max={10000} required value={maxPoints} onChange={(e) => setMaxPoints(e.target.value)}
+            className={`${field} mt-1 w-full`} />
+        </label>
+      </div>
+      <div className="flex flex-wrap items-center gap-4 text-sm text-slate-700">
+        <span className="text-xs font-semibold text-slate-600">Hình thức nộp:</span>
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={types.includes("TextEntry")} onChange={() => toggleType("TextEntry")} /> Văn bản
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={types.includes("FileUpload")} onChange={() => toggleType("FileUpload")} /> Tải tệp
+        </label>
+        {types.includes("FileUpload") && (
+          <input value={extensions} onChange={(e) => setExtensions(e.target.value)} placeholder=".pdf, .docx (trống = mọi loại)"
+            aria-label="Loại tệp cho phép" className={`${field} min-w-[200px] flex-1`} />
+        )}
+      </div>
+      <label className="flex items-center gap-1.5 text-sm text-slate-700">
+        <input type="checkbox" checked={allowLate} onChange={(e) => setAllowLate(e.target.checked)} />
+        Nhận bài nộp muộn (đánh dấu “muộn”)
+      </label>
+      <div className="flex gap-2">
+        <button type="submit" disabled={busy || types.length === 0}
+          className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60">
+          Tạo bài tập
+        </button>
+        <button type="button" onClick={onCancel} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">
+          Hủy
+        </button>
+      </div>
+      {types.length === 0 && <p className="text-xs text-red-600">Chọn ít nhất một hình thức nộp.</p>}
     </form>
   );
 }

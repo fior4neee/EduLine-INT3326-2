@@ -1,9 +1,7 @@
 
 import {
     ArrowRight,
-    Award,
     BookOpen,
-    ChartNoAxesColumnIncreasing,
     CheckCircle2,
     GraduationCap,
     Play,

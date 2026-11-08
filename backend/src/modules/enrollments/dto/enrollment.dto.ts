@@ -9,6 +9,13 @@ export class EnrollDto {
   @IsString()
   @MaxLength(64)
   coursePassword?: string;
+
+  // Answer to "receive notifications from this course?" in the enroll dialog.
+  // Omitted = not answered (Default, behaves like Granted).
+  @ApiProperty({ required: false, enum: ['Granted', 'Denied'] })
+  @IsOptional()
+  @IsIn(['Granted', 'Denied'])
+  notifications?: 'Granted' | 'Denied';
 }
 
 export class CourseStudentsQueryDto extends PaginationQueryDto {

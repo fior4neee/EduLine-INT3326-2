@@ -66,6 +66,13 @@ export class CreateCourseDto {
   @MaxLength(50)
   category?: string | null;
 
+  // Sent to each student as a notification when they enroll. null clears it.
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(2000)
+  welcomeMessage?: string | null;
+
   // Public cover image: an https URL or a path on the frontend site ("/images/x.png").
   @IsOptional()
   @IsString()
@@ -131,6 +138,13 @@ export class UpdateCourseDto {
   @IsString()
   @MaxLength(50)
   category?: string | null;
+
+  // Sent to each student as a notification when they enroll. null clears it.
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(2000)
+  welcomeMessage?: string | null;
 
   // Public cover image: an https URL or a path on the frontend site ("/images/x.png").
   @IsOptional()

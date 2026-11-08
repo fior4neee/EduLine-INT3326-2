@@ -15,6 +15,7 @@ export interface Course {
   shortSummary: string | null;
   category: string | null;
   thumbnailUrl: string | null;
+  welcomeMessage: string | null;
   difficultyLevel: Difficulty;
   instructorIds: string[];
   instructors: Array<{ id: string; firstName: string; lastName: string }>;
@@ -88,8 +89,13 @@ export async function getCourse(idOrSlug: string): Promise<CourseDetail> {
   return (await api.get<CourseDetail>(`/courses/${encodeURIComponent(idOrSlug)}`)).data;
 }
 
-export async function enroll(courseId: string, coursePassword?: string): Promise<Enrollment> {
-  return (await api.post<Enrollment>(`/courses/${courseId}/enroll`, { coursePassword })).data;
+// `notifications` is the answer to "receive notifications from this course?".
+export async function enroll(
+  courseId: string,
+  coursePassword?: string,
+  notifications?: "Granted" | "Denied",
+): Promise<Enrollment> {
+  return (await api.post<Enrollment>(`/courses/${courseId}/enroll`, { coursePassword, notifications })).data;
 }
 
 export async function dropCourse(courseId: string): Promise<void> {
@@ -119,6 +125,7 @@ export interface CourseInput {
   shortSummary?: string | null;
   category?: string | null;
   thumbnailUrl?: string | null;
+  welcomeMessage?: string | null;
   difficultyLevel: Difficulty;
   hasCertificate?: boolean;
   coursePassword?: string | null;

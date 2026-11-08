@@ -1,0 +1,87 @@
+{
+  "slug": "nhap-mon-lap-trinh-c",
+  "title": "Nhập môn lập trình với ngôn ngữ C",
+  "shortSummary": "Làm quen với lập trình qua ngôn ngữ C: biến, kiểu dữ liệu, nhập xuất, biểu thức và phạm vi biến.",
+  "category": "Lập trình",
+  "difficultyLevel": "College",
+  "instructor": "minh.nguyen",
+  "thumbnailUrl": "/images/courses/nhap-mon-lap-trinh-c.svg",
+  "hasCertificate": true,
+  "welcomeMessage": "Chào mừng bạn đến với khóa Nhập môn lập trình C! Hãy cài sẵn một trình biên dịch (gcc hoặc clang) để chạy thử các ví dụ.",
+  "vmluSubject": "18",
+  "sources": [
+    {
+      "title": "Modern C",
+      "author": "Jens Gustedt",
+      "url": "https://livebook.manning.com/book/modern-c-third-edition/title",
+      "license": "Bản PDF miễn phí, giấy phép Creative Commons phi thương mại"
+    },
+    {
+      "title": "C (ngôn ngữ lập trình)",
+      "author": "Wikipedia tiếng Việt",
+      "url": "https://vi.wikipedia.org/wiki/C_(ngôn_ngữ_lập_trình)",
+      "license": "CC BY-SA 4.0"
+    }
+  ],
+  "modules": [
+    {
+      "title": "Chương 1: Làm quen với C",
+      "lessons": [
+        { "title": "Video: Giới thiệu khóa học", "type": "Video", "minutes": 8, "isPreview": true },
+        {
+          "title": "Lịch sử và đặc điểm của ngôn ngữ C",
+          "type": "Text",
+          "minutes": 10,
+          "text": "Ngôn ngữ C được Dennis Ritchie phát triển tại Bell Labs vào khoảng năm 1972. C kế thừa từ ngôn ngữ B của Ken Thompson, và B lại bắt nguồn từ BCPL. Mục tiêu ban đầu của C là viết lại hệ điều hành Unix sao cho dễ chuyển sang nhiều loại máy khác nhau.\n\nCác mốc chính:\n• 1978: Kernighan và Ritchie xuất bản cuốn \"The C Programming Language\" (thường gọi là K&R C).\n• 1989/1990: chuẩn ANSI C (C89/C90) ra đời.\n• Các chuẩn tiếp theo: C99, C11, C17 và C23.\n\nĐặc điểm của C:\n• Là ngôn ngữ lập trình có cấu trúc (structured) và thủ tục (procedural): chương trình được chia thành các hàm, dùng các cấu trúc điều khiển if, for, while.\n• Là ngôn ngữ biên dịch: mã nguồn được dịch ra mã máy trước khi chạy, nên chương trình chạy nhanh.\n• Gần với phần cứng: cho phép làm việc trực tiếp với bộ nhớ qua con trỏ, vì vậy C được dùng nhiều cho hệ điều hành, trình điều khiển thiết bị và hệ thống nhúng.\n• Có tính khả chuyển: cùng một mã nguồn có thể biên dịch trên nhiều nền tảng.\n\nNhiều ngôn ngữ hiện đại như C++, Java, C# hay Go đều chịu ảnh hưởng cú pháp của C, nên học C là nền tảng tốt để học các ngôn ngữ khác."
+        },
+        {
+          "title": "Chương trình C đầu tiên",
+          "type": "Text",
+          "minutes": 12,
+          "text": "Một chương trình C đơn giản:\n\n    #include <stdio.h>\n\n    int main(void) {\n        printf(\"Xin chào EduLine!\\n\");\n        return 0;\n    }\n\nGiải thích từng dòng:\n• #include <stdio.h> nạp thư viện nhập xuất chuẩn, trong đó có hàm printf.\n• int main(void) là hàm chính. Mọi chương trình C đều bắt đầu chạy từ hàm main.\n• printf(...) in chuỗi ra màn hình. Ký tự \\n là xuống dòng.\n• return 0; báo cho hệ điều hành biết chương trình kết thúc thành công.\n• Mỗi câu lệnh kết thúc bằng dấu chấm phẩy (;). Khối lệnh được bao bởi cặp ngoặc nhọn { }.\n\nBiên dịch và chạy bằng gcc:\n\n    gcc hello.c -o hello\n    ./hello\n\nQuy trình gồm: tiền xử lý (xử lý #include, #define), biên dịch ra mã đối tượng, rồi liên kết với thư viện để tạo file chạy được.\n\nGhi chú trong C: // cho một dòng, /* ... */ cho nhiều dòng. Trình biên dịch bỏ qua phần ghi chú."
+        }
+      ]
+    },
+    {
+      "title": "Chương 2: Biến, kiểu dữ liệu và nhập xuất",
+      "lessons": [
+        {
+          "title": "Biến và quy tắc đặt tên",
+          "type": "Text",
+          "minutes": 10,
+          "text": "Biến là một vùng nhớ có tên, dùng để lưu giá trị. Trong C, biến phải được khai báo kèm kiểu trước khi dùng:\n\n    int tuoi = 20;\n    double diem_tb;\n\nQuy tắc đặt tên (định danh) trong C:\n• Chỉ gồm chữ cái tiếng Anh (a–z, A–Z), chữ số (0–9) và dấu gạch dưới (_).\n• Không được bắt đầu bằng chữ số.\n• Không chứa khoảng trắng, dấu gạch ngang hay ký tự đặc biệt như @, #, $.\n• Không trùng với từ khóa của C (int, float, return, if, while, ...).\n• Phân biệt chữ hoa và chữ thường: Tong và tong là hai biến khác nhau.\n\nVí dụ:\n• Hợp lệ: so_luong, _dem, x1, TongTien\n• Không hợp lệ: 1x (bắt đầu bằng số), so-luong (có dấu gạch ngang), tong tien (có khoảng trắng), int (là từ khóa)\n\nNên đặt tên có nghĩa, ví dụ diem_toan thay vì d1, để chương trình dễ đọc."
+        },
+        {
+          "title": "Kiểu dữ liệu cơ bản",
+          "type": "Text",
+          "minutes": 10,
+          "text": "C có bốn kiểu dữ liệu cơ bản:\n• char: một ký tự, thường chiếm 1 byte. Ví dụ: char c = 'A';\n• int: số nguyên, thường chiếm 4 byte. Ví dụ: int n = 42;\n• float: số thực độ chính xác đơn, thường 4 byte. Ví dụ: float x = 3.14f;\n• double: số thực độ chính xác kép, thường 8 byte. Ví dụ: double y = 2.718281828;\n\nCác từ bổ nghĩa thay đổi phạm vi giá trị:\n• short, long, long long: thay đổi kích thước số nguyên.\n• signed, unsigned: có dấu hoặc không dấu. unsigned int chỉ chứa số không âm.\n\nToán tử sizeof cho biết số byte của một kiểu hoặc biến:\n\n    printf(\"%zu\\n\", sizeof(double)); // thường in ra 8\n\nKích thước chính xác phụ thuộc vào trình biên dịch và máy, chuẩn C chỉ quy định kích thước tối thiểu.\n\nNgoài ra còn có các kiểu dẫn xuất (mảng, con trỏ, cấu trúc struct) được xây dựng từ các kiểu cơ bản."
+        },
+        {
+          "title": "Nhập xuất với printf và scanf",
+          "type": "Text",
+          "minutes": 15,
+          "text": "printf in dữ liệu theo một xâu định dạng. Mỗi đặc tả bắt đầu bằng dấu %:\n• %d hoặc %i: số nguyên (int)\n• %ld: số nguyên dài (long)\n• %u: số nguyên không dấu\n• %o: số nguyên ở hệ 8 (bát phân)\n• %x hoặc %X: số nguyên ở hệ 16 (thập lục phân)\n• %f: số thực (float, double)\n• %lf: số thực độ chính xác kép (double)\n• %e: số thực dạng khoa học, ví dụ 1.5e+03\n• %c: một ký tự\n• %s: một xâu ký tự\n• %p: địa chỉ (con trỏ), ví dụ printf(\"%p\", &x);\n• %%: in ra chính dấu %\n\nVí dụ:\n\n    int n = 255;\n    printf(\"%d %o %x\\n\", n, n, n); // 255 377 ff\n\nscanf đọc dữ liệu từ bàn phím, cần truyền địa chỉ biến bằng toán tử &:\n\n    int a;\n    double b;\n    scanf(\"%d %lf\", &a, &b);\n\nLưu ý: với scanf, double bắt buộc dùng %lf. Với printf, cả %f và %lf đều in được double. Khi đọc xâu bằng %s thì không cần &, vì tên mảng đã là địa chỉ."
+        }
+      ]
+    },
+    {
+      "title": "Chương 3: Biểu thức, phạm vi biến và ôn tập",
+      "lessons": [
+        {
+          "title": "Biểu thức và toán tử",
+          "type": "Text",
+          "minutes": 12,
+          "text": "Các nhóm toán tử chính trong C:\n• Số học: + - * / %\n• Quan hệ: < <= > >= == !=\n• Logic: && (và), || (hoặc), ! (phủ định)\n• Gán: = += -= *= /= %=\n• Tăng giảm: ++ và --\n\nNhững điểm hay nhầm:\n• Phép chia hai số nguyên cho kết quả nguyên: 7 / 2 bằng 3. Muốn có 3.5 thì một toán hạng phải là số thực: 7.0 / 2.\n• Toán tử % (chia lấy dư) chỉ dùng cho số nguyên. Nếu a và b là số thực thì viết a % b là sai cú pháp; khi đó dùng hàm fmod(a, b) trong <math.h>.\n• == là so sánh, = là gán. Viết if (x = 5) sẽ gán 5 cho x chứ không so sánh.\n• C không có toán tử lũy thừa. Dùng pow(a, b) trong <math.h>; a^b trong C là phép XOR bit.\n• Phép nhân phải viết rõ: 2*a chứ không viết 2a.\n\nĐộ ưu tiên: ! và ++ cao nhất, rồi * / %, rồi + -, rồi các toán tử quan hệ, rồi &&, rồi ||, thấp nhất là phép gán. Khi không chắc chắn, hãy dùng dấu ngoặc."
+        },
+        {
+          "title": "Biến toàn cục và biến cục bộ",
+          "type": "Text",
+          "minutes": 10,
+          "text": "Phạm vi (scope) của biến là vùng chương trình có thể dùng biến đó.\n\nBiến toàn cục (global):\n• Được khai báo bên ngoài mọi hàm.\n• Dùng được ở mọi hàm từ vị trí khai báo đến cuối file.\n• Tồn tại suốt thời gian chương trình chạy, và được tự động khởi tạo bằng 0 nếu không gán giá trị đầu.\n\nBiến cục bộ (local, còn gọi là biến địa phương):\n• Được khai báo bên trong một hàm hoặc một khối { }.\n• Chỉ dùng được trong hàm hoặc khối đó.\n• Được tạo khi chương trình vào khối và mất đi khi ra khỏi khối. Nếu không khởi tạo, giá trị ban đầu là không xác định.\n\nVí dụ:\n\n    int dem = 0;          // toàn cục\n\n    void tang(void) {\n        int buoc = 1;     // cục bộ\n        dem += buoc;\n    }\n\nNếu biến cục bộ trùng tên với biến toàn cục, trong khối đó biến cục bộ sẽ che biến toàn cục.\n\nBiến cục bộ khai báo với từ khóa static vẫn chỉ dùng được trong hàm, nhưng giữ nguyên giá trị giữa các lần gọi hàm.\n\nNên hạn chế biến toàn cục, vì bất kỳ hàm nào cũng có thể thay đổi nó, khiến chương trình khó kiểm soát."
+        },
+        { "title": "Bài kiểm tra cuối khóa (VMLU)", "type": "Quiz", "minutes": 20, "quizTitle": "Kiểm tra: Nhập môn lập trình C" }
+      ]
+    }
+  ]
+}

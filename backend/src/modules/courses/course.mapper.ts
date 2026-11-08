@@ -50,6 +50,7 @@ export function toCourseResponse(c: CourseWithLinks, stats: CourseStats = EMPTY_
     shortSummary: c.shortSummary,
     category: c.category,
     thumbnailUrl: c.thumbnailUrl,
+    welcomeMessage: c.welcomeMessage,
     difficultyLevel: DIFFICULTY_TO_API[c.difficultyLevel],
     instructorIds: c.instructors.map((i) => i.instructorId),
     instructors: c.instructors.map((i) => ({
