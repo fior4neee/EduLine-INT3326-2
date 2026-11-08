@@ -1,0 +1,81 @@
+{
+  "slug": "xac-suat-thong-ke",
+  "title": "Xác suất và thống kê ứng dụng",
+  "shortSummary": "Thống kê mô tả, biến cố và xác suất, xác suất có điều kiện, công thức Bayes, phân phối nhị thức và phân phối chuẩn.",
+  "category": "Toán học",
+  "difficultyLevel": "College",
+  "instructor": "ha.pham",
+  "thumbnailUrl": "/images/courses/xac-suat-thong-ke.svg",
+  "hasCertificate": true,
+  "welcomeMessage": "Chào mừng bạn đến với khóa Xác suất và thống kê! Chuẩn bị giấy bút và máy tính cầm tay để làm theo các ví dụ nhé.",
+  "vmluSubject": "21",
+  "sources": [
+    {
+      "title": "Introductory Statistics 2e",
+      "author": "OpenStax (Rice University)",
+      "url": "https://openstax.org/details/books/introductory-statistics-2e",
+      "license": "CC BY 4.0"
+    }
+  ],
+  "modules": [
+    {
+      "title": "Chương 1: Dữ liệu và thống kê mô tả",
+      "lessons": [
+        { "title": "Video: Thống kê trong đời sống", "type": "Video", "minutes": 8, "isPreview": true },
+        {
+          "title": "Tổng thể, mẫu và các loại dữ liệu",
+          "type": "Text",
+          "minutes": 10,
+          "text": "Thống kê là khoa học về thu thập, tổ chức, phân tích và diễn giải dữ liệu.\n\nKhái niệm cơ bản:\n• Tổng thể (population): toàn bộ các đối tượng cần nghiên cứu. Ví dụ: tất cả sinh viên của một trường.\n• Mẫu (sample): một phần của tổng thể được chọn ra để khảo sát. Ví dụ: 200 sinh viên được chọn ngẫu nhiên.\n• Tham số (parameter): con số mô tả tổng thể, ví dụ điểm trung bình của toàn trường.\n• Thống kê (statistic): con số tính từ mẫu, dùng để ước lượng tham số.\n\nCác loại dữ liệu:\n• Định tính (phân loại): giới tính, quê quán, chuyên ngành.\n• Định lượng rời rạc: đếm được, ví dụ số anh chị em trong gia đình.\n• Định lượng liên tục: đo được, ví dụ chiều cao, cân nặng, thời gian.\n\nCách lấy mẫu phổ biến:\n• Ngẫu nhiên đơn giản: mọi cá thể có cơ hội được chọn như nhau.\n• Phân tầng: chia tổng thể thành các nhóm rồi lấy ngẫu nhiên trong từng nhóm.\n• Hệ thống: chọn cách đều, ví dụ cứ 10 người lấy 1.\n• Theo cụm: chọn ngẫu nhiên một vài cụm rồi khảo sát toàn bộ cụm đó.\n\nMẫu tốt phải đại diện cho tổng thể. Mẫu tiện lợi (hỏi người quen) thường bị chệch."
+        },
+        {
+          "title": "Các đại lượng đặc trưng của dữ liệu",
+          "type": "Text",
+          "minutes": 15,
+          "text": "Đo xu hướng trung tâm:\n• Trung bình (mean): tổng các giá trị chia cho số giá trị.\n• Trung vị (median): giá trị ở giữa khi sắp xếp dữ liệu tăng dần. Ít bị ảnh hưởng bởi giá trị ngoại lai.\n• Mốt (mode): giá trị xuất hiện nhiều nhất.\n\nĐo độ phân tán:\n• Khoảng biến thiên: giá trị lớn nhất trừ giá trị nhỏ nhất.\n• Phương sai mẫu: s² = Σ(xᵢ − x̄)² / (n − 1).\n• Độ lệch chuẩn: s = √s², cùng đơn vị với dữ liệu.\n• Khoảng tứ phân vị IQR = Q3 − Q1.\n\nVí dụ với dữ liệu 2, 4, 4, 5, 10:\n• Trung bình = 25 / 5 = 5\n• Trung vị = 4\n• Mốt = 4\n• Phương sai mẫu = (9 + 1 + 1 + 0 + 25) / 4 = 9, độ lệch chuẩn = 3\n\nGiá trị 10 kéo trung bình lên cao hơn trung vị. Khi dữ liệu lệch như vậy, trung vị thường phản ánh \"giá trị điển hình\" tốt hơn trung bình."
+        }
+      ]
+    },
+    {
+      "title": "Chương 2: Xác suất",
+      "lessons": [
+        {
+          "title": "Phép thử, biến cố và các phép toán",
+          "type": "Text",
+          "minutes": 12,
+          "text": "• Phép thử: một thí nghiệm hay hành động mà kết quả không biết trước, ví dụ tung đồng xu, kiểm tra một sản phẩm.\n• Không gian mẫu Ω: tập hợp tất cả kết quả có thể xảy ra.\n• Biến cố: một tập con của Ω.\n\nPhép toán trên biến cố:\n• Tổng A + B (hay A ∪ B): xảy ra khi ít nhất một trong hai biến cố xảy ra.\n• Tích AB (hay A ∩ B): xảy ra khi cả hai cùng xảy ra.\n• Biến cố đối Ā: xảy ra khi A không xảy ra. P(Ā) = 1 − P(A).\n• A và B xung khắc nếu không thể cùng xảy ra (AB = ∅).\n• Hệ đầy đủ: các biến cố đôi một xung khắc và tổng của chúng là Ω.\n\nVí dụ: kiểm tra 3 sản phẩm, gọi Aᵢ là biến cố sản phẩm thứ i tốt (i = 1, 2, 3).\n• \"Cả 3 sản phẩm đều tốt\" = A₁A₂A₃.\n• \"Có ít nhất một sản phẩm tốt\" = A₁ + A₂ + A₃.\n• \"Không có sản phẩm nào tốt\" = Ā₁Ā₂Ā₃, là biến cố đối của \"có ít nhất một sản phẩm tốt\".\n\nNếu gọi Bₖ là biến cố có đúng k sản phẩm tốt (k = 0, 1, 2, 3) thì B₀, B₁, B₂, B₃ lập thành một hệ đầy đủ."
+        },
+        {
+          "title": "Công thức cộng, nhân và xác suất có điều kiện",
+          "type": "Text",
+          "minutes": 15,
+          "text": "Định nghĩa cổ điển: nếu các kết quả đồng khả năng thì P(A) = số kết quả thuận lợi cho A / tổng số kết quả.\n\nCông thức cộng:\n• P(A + B) = P(A) + P(B) − P(AB)\n• Nếu A và B xung khắc: P(A + B) = P(A) + P(B)\n\nXác suất có điều kiện của A khi biết B đã xảy ra:\n• P(A|B) = P(AB) / P(B), với P(B) > 0\n\nCông thức nhân:\n• P(AB) = P(B) · P(A|B) = P(A) · P(B|A)\n• A và B độc lập khi việc xảy ra của biến cố này không ảnh hưởng đến biến cố kia. Khi đó P(AB) = P(A) · P(B).\n\nVí dụ: một hộp có 3 bi đỏ và 2 bi xanh. Lấy lần lượt 2 bi không hoàn lại. Xác suất cả hai bi đều đỏ:\nP = 3/5 · 2/4 = 6/20 = 0,3.\n\nNếu lấy có hoàn lại thì hai lần lấy độc lập: P = 3/5 · 3/5 = 0,36."
+        },
+        {
+          "title": "Công thức xác suất toàn phần và Bayes",
+          "type": "Text",
+          "minutes": 15,
+          "text": "Giả sử H₁, H₂, ..., Hₙ là một hệ đầy đủ các biến cố. Với biến cố A bất kỳ:\n\nCông thức xác suất toàn phần:\nP(A) = P(H₁)P(A|H₁) + P(H₂)P(A|H₂) + ... + P(Hₙ)P(A|Hₙ)\n\nCông thức Bayes (xác suất của giả thiết Hᵢ sau khi biết A đã xảy ra):\nP(Hᵢ|A) = P(Hᵢ)P(A|Hᵢ) / P(A)\n\nVí dụ: hai phân xưởng cùng sản xuất một loại sản phẩm. Phân xưởng I làm 60% sản phẩm, tỉ lệ phế phẩm 2%. Phân xưởng II làm 40%, tỉ lệ phế phẩm 5%. Lấy ngẫu nhiên một sản phẩm.\n• Xác suất sản phẩm là phế phẩm: P(A) = 0,6 · 0,02 + 0,4 · 0,05 = 0,012 + 0,020 = 0,032.\n• Biết sản phẩm là phế phẩm, xác suất nó do phân xưởng II làm ra: P(H₂|A) = 0,020 / 0,032 = 0,625.\n\nNhận xét: phân xưởng II chỉ làm 40% sản phẩm nhưng chiếm 62,5% số phế phẩm, vì tỉ lệ lỗi của nó cao hơn."
+        }
+      ]
+    },
+    {
+      "title": "Chương 3: Biến ngẫu nhiên và ôn tập",
+      "lessons": [
+        {
+          "title": "Biến ngẫu nhiên rời rạc và phân phối nhị thức",
+          "type": "Text",
+          "minutes": 15,
+          "text": "Biến ngẫu nhiên X là đại lượng nhận giá trị số tùy theo kết quả của phép thử.\n\nVới biến ngẫu nhiên rời rạc có bảng phân phối P(X = xᵢ) = pᵢ:\n• Kỳ vọng: E(X) = Σ xᵢpᵢ\n• Phương sai: V(X) = E(X²) − [E(X)]²\n• Độ lệch chuẩn: σ = √V(X)\n\nPhân phối nhị thức B(n, p): thực hiện n phép thử độc lập, mỗi lần biến cố A xảy ra với xác suất p. X là số lần A xảy ra.\n• P(X = k) = C(n, k) · pᵏ · (1 − p)ⁿ⁻ᵏ, với k = 0, 1, ..., n\n• E(X) = np\n• V(X) = np(1 − p)\n\nVí dụ: một sinh viên đoán ngẫu nhiên 10 câu trắc nghiệm, mỗi câu có 4 phương án, chỉ 1 phương án đúng. Khi đó X ~ B(10; 0,25).\n• Số câu đúng trung bình: E(X) = 10 · 0,25 = 2,5\n• Xác suất đúng đúng 3 câu: C(10, 3) · 0,25³ · 0,75⁷ ≈ 0,25"
+        },
+        {
+          "title": "Phân phối chuẩn",
+          "type": "Text",
+          "minutes": 12,
+          "text": "Phân phối chuẩn N(μ, σ²) có đồ thị hình chuông, đối xứng qua giá trị trung bình μ. Rất nhiều đại lượng trong tự nhiên và xã hội có phân phối gần chuẩn: chiều cao, sai số đo, điểm thi của số đông.\n\nQuy tắc 68–95–99,7:\n• Khoảng 68% giá trị nằm trong μ ± σ\n• Khoảng 95% giá trị nằm trong μ ± 2σ\n• Khoảng 99,7% giá trị nằm trong μ ± 3σ\n\nChuẩn hóa: với X ~ N(μ, σ²), đặt Z = (X − μ) / σ thì Z ~ N(0, 1). Giá trị z cho biết một quan sát cách trung bình bao nhiêu độ lệch chuẩn. Sau đó tra bảng phân phối chuẩn tắc (hàm Laplace) để tính xác suất.\n\nVí dụ: điểm thi có phân phối N(65, 10²). Một bạn được 85 điểm thì z = (85 − 65) / 10 = 2, tức là cao hơn trung bình 2 độ lệch chuẩn. Theo quy tắc trên, chỉ khoảng 2,5% thí sinh đạt từ 85 điểm trở lên.\n\nĐịnh lý giới hạn trung tâm: trung bình của một mẫu đủ lớn có phân phối xấp xỉ chuẩn, bất kể tổng thể ban đầu có phân phối gì. Đây là cơ sở của ước lượng và kiểm định thống kê."
+        },
+        { "title": "Bài kiểm tra cuối khóa (VMLU)", "type": "Quiz", "minutes": 25, "quizTitle": "Kiểm tra: Xác suất và thống kê" }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,9 @@
-import axios from "axios";
-import { api, refreshAccessToken, tokenStore } from "./api";
+import { api, refreshSession, tokenStore } from "./api";
+
+// Shapes from backend/README.md §3.1 and §8.
 
 export type AccountType = "Student" | "Instructor" | "Admin";
+export type InstructorRequestStatus = "Pending" | "Approved" | "Rejected" | null;
 
 export interface User {
   id: string;
@@ -11,10 +13,24 @@ export interface User {
   email: string;
   accountType: AccountType;
   description: string | null;
-  enrolledCourses?: Array<{ courseId: string; status: string; enrolledAt: string; progressPercentage: number }>;
+  isVerified: boolean;
+  instructorRequestStatus: InstructorRequestStatus;
+  enrolledCourses?: Array<{
+    courseId: string;
+    status: string;
+    enrolledAt: string;
+    progressPercentage: number;
+  }>;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface Session { accessToken: string; refreshToken: string; user: User }
+export interface Session {
+  accessToken: string;
+  refreshToken: string;
+  user: User;
+}
+
 export interface RegisterInput {
   username: string;
   firstName: string;
@@ -24,46 +40,63 @@ export interface RegisterInput {
   accountType: "Student" | "Instructor";
 }
 
-export async function login(username: string, password: string) {
-  const { data } = await api.post<Session>("/auth/login", { username, password });
+export interface Paginated<T> {
+  data: T[];
+  meta: { page: number; pageSize: number; total: number };
+}
+
+export async function login(usernameOrEmail: string, password: string): Promise<User> {
+  const { data } = await api.post<Session>("/auth/login", {
+    username: usernameOrEmail,
+    password,
+  });
   tokenStore.set(data);
   return data.user;
 }
 
-export async function register(input: RegisterInput) {
+export async function register(input: RegisterInput): Promise<User> {
   const { data } = await api.post<Session>("/auth/register", input);
   tokenStore.set(data);
   return data.user;
 }
 
-export async function restoreSession() {
-  await refreshAccessToken();
-  return (await api.get<User>("/users/me")).data;
-}
-
-export async function logout() {
+export async function logout(): Promise<void> {
   const refreshToken = tokenStore.getRefresh();
   tokenStore.clear();
-  if (refreshToken) await api.post("/auth/logout", { refreshToken }).catch(() => undefined);
+  if (refreshToken) {
+    await api.post("/auth/logout", { refreshToken }).catch(() => undefined);
+  }
 }
 
-export function getErrorMessage(error: unknown) {
-  if (axios.isAxiosError(error)) {
-    const code = error.response?.data?.error?.code as string | undefined;
-    const messages: Record<string, string> = {
-      INVALID_CREDENTIALS: "Tên đăng nhập/email hoặc mật khẩu không đúng.",
-      EMAIL_TAKEN: "Email này đã được đăng ký.",
-      USERNAME_TAKEN: "Tên đăng nhập này đã được sử dụng.",
-      VALIDATION_FAILED: "Thông tin chưa hợp lệ. Hãy kiểm tra các trường và quy tắc mật khẩu.",
-      RATE_LIMITED: "Bạn đã thử quá nhiều lần. Vui lòng đợi một phút rồi thử lại.",
-    };
-    if (!error.response) return "Không kết nối được máy chủ. Kiểm tra backend tại cổng 8000.";
-    return (code && messages[code]) || (error.response.data?.error?.message as string | undefined) || "Đã có lỗi xảy ra. Vui lòng thử lại.";
-  }
-  if (typeof error === "object" && error && "response" in error) {
-    const response = (error as { response?: { data?: { error?: { message?: string } }; status?: number } }).response;
-    if (!response) return "Không kết nối được máy chủ. Kiểm tra backend tại cổng 8000.";
-    return response.data?.error?.message ?? (response.status === 401 ? "Thông tin đăng nhập không chính xác." : "Đã có lỗi xảy ra. Vui lòng thử lại.");
-  }
-  return "Đã có lỗi xảy ra. Vui lòng thử lại.";
+// Gets a fresh access token, which also carries the current role
+// (for example right after an Admin approves an instructor request).
+export async function restoreSession(): Promise<User> {
+  return (await refreshSession()).user;
+}
+
+export async function requestInstructorRole(): Promise<User> {
+  return (await api.post<User>("/users/me/instructor-request")).data;
+}
+
+// ─── Admin ─────────────────────────────────────────────────────────────────
+
+export interface AdminUsersQuery {
+  page?: number;
+  pageSize?: number;
+  accountType?: AccountType;
+  instructorRequestStatus?: "Pending" | "Approved" | "Rejected";
+  q?: string;
+}
+
+export async function listUsers(query: AdminUsersQuery): Promise<Paginated<User>> {
+  return (await api.get<Paginated<User>>("/admin/users", { params: query })).data;
+}
+
+export async function decideInstructorRequest(userId: string, approve: boolean): Promise<User> {
+  const action = approve ? "approve" : "reject";
+  return (await api.post<User>(`/admin/users/${userId}/instructor-request/${action}`)).data;
+}
+
+export async function setAccountType(userId: string, accountType: AccountType): Promise<User> {
+  return (await api.patch<User>(`/admin/users/${userId}`, { accountType })).data;
 }

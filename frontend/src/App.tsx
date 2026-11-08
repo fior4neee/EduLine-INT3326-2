@@ -5,11 +5,18 @@ import HeroSection from "./components/heroSection";
 import FeaturedCourses from "./components/featuredCourse";
 import LoginPage from "./pages/loginPage";
 import RegisterPage from "./pages/registerPage";
-import StudentDashboardPage from "./pages/studentDashboardPage";
+import AccountPage from "./pages/accountPage";
+import AdminUsersPage from "./pages/adminUsersPage";
 import RequireAuth from "./auth/RequireAuth";
-import { AuthProvider } from "./auth/AuthProvider";
 import CoursesPage from "./pages/coursesPage";
 import CourseDetailPage from "./pages/courseDetailPage";
+import LessonPage from "./pages/lessonPage";
+import MyCoursesPage from "./pages/myCoursesPage";
+import InstructorCoursesPage from "./pages/instructorCoursesPage";
+import InstructorCourseManagePage from "./pages/instructorCourseManagePage";
+import NotificationsPage from "./pages/notificationsPage";
+import GradebookPage from "./pages/gradebookPage";
+import StudentDashboardPage from "./pages/studentDashboardPage";
 
 function HomePage() {
   return (
@@ -39,7 +46,6 @@ function PlaceholderPage({ title }: { title: string }) {
 
 export default function App() {
   return (
-    <AuthProvider>
     <BrowserRouter>
       <Routes>
         {/* Public pages with Navbar */}
@@ -47,9 +53,73 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/courses" element={<CoursesPage />} />
           <Route path="/courses/:idOrSlug" element={<CourseDetailPage />} />
+          <Route path="/courses/:idOrSlug/lessons/:lessonId" element={<LessonPage />} />
+          <Route
+            path="/dashboard"
+            element={
+              <RequireAuth roles={["Student"]}>
+                <StudentDashboardPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/my-courses"
+            element={
+              <RequireAuth>
+                <MyCoursesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/instructor/courses"
+            element={
+              <RequireAuth roles={["Instructor", "Admin"]}>
+                <InstructorCoursesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/instructor/courses/:courseId"
+            element={
+              <RequireAuth roles={["Instructor", "Admin"]}>
+                <InstructorCourseManagePage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <RequireAuth>
+                <NotificationsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/instructor/assignments/:assignmentId"
+            element={
+              <RequireAuth roles={["Instructor", "Admin"]}>
+                <GradebookPage />
+              </RequireAuth>
+            }
+          />
           <Route path="/instructors" element={<PlaceholderPage title="Giảng viên" />} />
           <Route path="/about" element={<PlaceholderPage title="Về chúng tôi" />} />
-          <Route path="/dashboard" element={<RequireAuth studentOnly><StudentDashboardPage /></RequireAuth>} />
+          <Route
+            path="/account"
+            element={
+              <RequireAuth>
+                <AccountPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <RequireAuth roles={["Admin"]}>
+                <AdminUsersPage />
+              </RequireAuth>
+            }
+          />
         </Route>
 
         {/* Authentication pages without Navbar */}
@@ -57,6 +127,5 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
       </Routes>
     </BrowserRouter>
-    </AuthProvider>
   );
 }

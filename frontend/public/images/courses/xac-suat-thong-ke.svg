@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 450" width="720" height="450">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#4c1d95"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs>
+  <rect width="720" height="450" fill="url(#g)"/>
+  <circle cx="690" cy="-20" r="160" fill="#ffffff" opacity="0.06"/>
+  <circle cx="-30" cy="470" r="200" fill="#ffffff" opacity="0.05"/>
+  <path d="M420 330 C 480 330, 500 120, 560 120 S 640 330, 700 330" fill="none" stroke="#ddd6fe" stroke-width="5"/>
+      <g fill="#c4b5fd" opacity="0.55">
+      <rect x="455" y="290" width="26" height="40"/><rect x="487" y="230" width="26" height="100"/>
+      <rect x="519" y="160" width="26" height="170"/><rect x="551" y="130" width="26" height="200"/>
+      <rect x="583" y="170" width="26" height="160"/><rect x="615" y="240" width="26" height="90"/>
+      <rect x="647" y="295" width="26" height="35"/></g>
+      <line x1="410" y1="332" x2="710" y2="332" stroke="#ede9fe" stroke-width="3"/>
+  <g font-family="system-ui,'Segoe UI',Roboto,Arial,sans-serif" fill="#ffffff">
+    <rect x="48" y="60" rx="14" width="140" height="34" fill="#ffffff" opacity="0.18"/>
+    <text x="66" y="83" font-size="17" font-weight="700" letter-spacing="1.5">TOÁN HỌC</text>
+    <text x="48" y="300" font-size="44" font-weight="800">Xác suất và</text>
+    <text x="48" y="354" font-size="44" font-weight="800">thống kê</text>
+    <text x="48" y="398" font-size="18" opacity="0.8">EduLine · Dữ liệu VMLU</text>
+  </g>
+</svg>

@@ -1,34 +1,455 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Clock3, LockKeyhole } from "lucide-react";
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { Link, useLocation, useParams } from "react-router-dom";
+import {
+  Award,
+  BookOpen,
+  CalendarClock,
+  CheckCircle2,
+  Clock3,
+  FileText,
+  Lock,
+  PlayCircle,
+  ScrollText,
+  Users,
+} from "lucide-react";
 import { useAuth } from "../auth/auth-context";
-import { getErrorMessage } from "../services/auth";
-import { enrollInCourse, getCourse, type CourseDetail } from "../services/courses";
+import {
+  COURSE_PLACEHOLDER_IMAGE,
+  DIFFICULTY_LABEL,
+  ENROLLMENT_BADGE,
+  ENROLLMENT_LABEL,
+  formatDate,
+  formatDuration,
+  instructorNames,
+  VISIBILITY_BADGE,
+  VISIBILITY_LABEL,
+} from "../lib/course-format";
+import { getErrorMessage } from "../services/api";
+import {
+  dropCourse,
+  enroll,
+  getCourse,
+  type CourseDetail,
+  type LessonType,
+} from "../services/courses";
+import { getCourseProgress, type CourseProgress } from "../services/lessons";
+import CourseNotificationToggle from "../components/courseNotificationToggle";
+
+const LESSON_ICON: Record<LessonType, typeof PlayCircle> = {
+  Video: PlayCircle,
+  Text: ScrollText,
+  Document: FileText,
+  Quiz: CheckCircle2,
+  Assignment: FileText,
+};
 
 export default function CourseDetailPage() {
   const { idOrSlug = "" } = useParams();
-  const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, status: authStatus } = useAuth();
   const [course, setCourse] = useState<CourseDetail | null>(null);
-  const [password, setPassword] = useState("");
+  const [progress, setProgress] = useState<CourseProgress | null>(null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [enrolling, setEnrolling] = useState(false);
-  useEffect(() => { setLoading(true); getCourse(idOrSlug).then(setCourse).catch((err) => setError(getErrorMessage(err))).finally(() => setLoading(false)); }, [idOrSlug]);
 
-  const enroll = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!course) return;
-    if (!user) { navigate("/login", { state: { from: window.location.pathname } }); return; }
-    setEnrolling(true); setError("");
-    try { await enrollInCourse(course.id, password || undefined); setCourse(await getCourse(idOrSlug)); }
-    catch (err) { setError(getErrorMessage(err)); }
-    finally { setEnrolling(false); }
+  const load = useCallback(async () => {
+    try {
+      const c = await getCourse(idOrSlug);
+      setCourse(c);
+      setError("");
+      const status = c.viewer.enrollment?.status;
+      setProgress(status === "Active" || status === "Completed" ? await getCourseProgress(c.id) : null);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }, [idOrSlug]);
+
+  // Reload when the user logs in or out: the enrollment box depends on who is viewing.
+  // Wait until a saved login is restored, or the first request runs as anonymous.
+  useEffect(() => {
+    if (authStatus === "loading") return;
+    void load();
+  }, [load, user?.id, authStatus]);
+
+  if (error && !course) {
+    return (
+      <main className="mx-auto max-w-5xl px-6 py-16">
+        <h1 className="text-2xl font-bold text-slate-900">Không tìm thấy khóa học</h1>
+        <p className="mt-2 text-slate-500">{error}</p>
+        <Link to="/courses" className="mt-6 inline-block font-semibold text-blue-600 hover:underline">
+          ← Về danh sách khóa học
+        </Link>
+      </main>
+    );
+  }
+  if (!course) return <main className="mx-auto max-w-5xl px-6 py-16 text-slate-400">Đang tải…</main>;
+
+  const canSeeLessons =
+    course.viewer.isStaff ||
+    course.viewer.enrollment?.status === "Active" ||
+    course.viewer.enrollment?.status === "Completed";
+
+  return (
+    <main className="bg-white">
+      {/* Header */}
+      <section className="bg-gradient-to-br from-[#dbeafe] via-[#eff6ff] to-[#e0e7ff]">
+        <div className="mx-auto grid max-w-[1200px] gap-8 px-6 py-10 lg:grid-cols-[1fr_420px] lg:px-10 lg:py-14">
+          <div>
+            <Link to="/courses" className="text-sm font-semibold text-blue-600 hover:underline">
+              ← Khóa học
+            </Link>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-semibold">
+              {course.category && (
+                <span className="rounded-lg bg-white px-3 py-1.5 text-blue-600">{course.category}</span>
+              )}
+              <span className="rounded-lg bg-white px-3 py-1.5 text-slate-700">
+                {DIFFICULTY_LABEL[course.difficultyLevel]}
+              </span>
+              {course.visibility !== "Public" && (
+                <span className={`rounded-lg px-3 py-1.5 ${VISIBILITY_BADGE[course.visibility]}`}>
+                  {VISIBILITY_LABEL[course.visibility]}
+                </span>
+              )}
+            </div>
+            <h1 className="mt-4 text-3xl font-extrabold leading-tight text-slate-900 md:text-4xl">
+              {course.title}
+            </h1>
+            {course.shortSummary && <p className="mt-4 text-lg leading-8 text-slate-600">{course.shortSummary}</p>}
+            <p className="mt-4 text-sm text-slate-600">
+              Giảng viên: <span className="font-semibold text-slate-900">{instructorNames(course)}</span>
+            </p>
+            <div className="mt-6 flex flex-wrap gap-5 text-sm text-slate-600">
+              <span className="flex items-center gap-1.5">
+                <Users size={16} /> {course.stats.studentCount} học viên
+              </span>
+              <span className="flex items-center gap-1.5">
+                <BookOpen size={16} /> {course.stats.lessonCount} bài học
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Clock3 size={16} /> {formatDuration(course.stats.totalDurationMinutes)}
+              </span>
+              {course.hasCertificate && (
+                <span className="flex items-center gap-1.5">
+                  <Award size={16} /> Có chứng chỉ
+                </span>
+              )}
+            </div>
+          </div>
+          <img
+            src={course.thumbnailUrl ?? COURSE_PLACEHOLDER_IMAGE}
+            alt={course.title}
+            className="aspect-video w-full rounded-2xl object-cover shadow-lg"
+          />
+        </div>
+      </section>
+
+      <section className="mx-auto grid max-w-[1200px] gap-8 px-6 py-10 lg:grid-cols-[1fr_380px] lg:px-10">
+        {/* Outline */}
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">Nội dung khóa học</h2>
+          {course.modules.length === 0 && (
+            <p className="mt-4 text-slate-500">Khóa học chưa có bài học nào.</p>
+          )}
+          <div className="mt-5 space-y-4">
+            {course.modules.map((m) => (
+              <div key={m.id} className="overflow-hidden rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between bg-slate-50 px-5 py-3">
+                  <h3 className="font-semibold text-slate-900">{m.title}</h3>
+                  <span className="text-xs text-slate-500">{m.lessons.length} bài</span>
+                </div>
+                <ul className="divide-y divide-slate-100">
+                  {m.lessons.map((l) => {
+                    const Icon = LESSON_ICON[l.type];
+                    const open = canSeeLessons || l.isPreview;
+                    const done = progress?.completedLessonIds.includes(l.id);
+                    const row = "flex items-center gap-3 px-5 py-3 text-sm";
+                    const content = (
+                      <>
+                        {done ? (
+                          <CheckCircle2 size={17} className="text-emerald-600" />
+                        ) : (
+                          <Icon size={17} className={open ? "text-blue-600" : "text-slate-400"} />
+                        )}
+                        <span className={open ? "text-slate-800" : "text-slate-500"}>{l.title}</span>
+                        {l.isPreview && !canSeeLessons && (
+                          <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                            Học thử
+                          </span>
+                        )}
+                        <span className="ml-auto flex items-center gap-2 text-xs text-slate-400">
+                          {l.estimatedDurationMinutes ? `${l.estimatedDurationMinutes} phút` : ""}
+                          {!open && <Lock size={14} />}
+                        </span>
+                      </>
+                    );
+                    return (
+                      <li key={l.id}>
+                        {open ? (
+                          <Link to={`/courses/${course.slug}/lessons/${l.id}`} className={`${row} hover:bg-blue-50/50`}>
+                            {content}
+                          </Link>
+                        ) : (
+                          <div className={row}>{content}</div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Enrollment box */}
+        <aside className="lg:sticky lg:top-24 lg:self-start">
+          <EnrollmentBox course={course} progress={progress} onChanged={load} />
+        </aside>
+      </section>
+    </main>
+  );
+}
+
+function EnrollmentBox({
+  course,
+  progress,
+  onChanged,
+}: {
+  course: CourseDetail;
+  progress: CourseProgress | null;
+  onChanged: () => Promise<void>;
+}) {
+  const { user } = useAuth();
+  const location = useLocation();
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [confirmDrop, setConfirmDrop] = useState(false);
+  const [wantNotifications, setWantNotifications] = useState(true);
+
+  const enrollment = course.viewer.enrollment;
+  const firstLessonId = course.modules.find((m) => m.lessons.length > 0)?.lessons[0].id;
+  const now = Date.now();
+  const notOpenYet = course.enrollmentOpensAt && new Date(course.enrollmentOpensAt).getTime() > now;
+  const closed = course.enrollmentClosesAt && new Date(course.enrollmentClosesAt).getTime() < now;
+  const published = course.visibility === "Public" || course.visibility === "Restricted";
+
+  const run = async (action: () => Promise<unknown>, success: string) => {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      await action();
+      setMessage(success);
+      setConfirmDrop(false);
+      setPassword("");
+      await onChanged();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  if (loading) return <main className="mx-auto max-w-5xl px-6 py-16 text-slate-500">Đang tải thông tin khóa học…</main>;
-  if (!course) return <main className="mx-auto max-w-5xl px-6 py-16"><p role="alert" className="text-red-700">{error || "Không tìm thấy khóa học."}</p><Link to="/courses" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-600"><ArrowLeft size={16} />Về danh mục</Link></main>;
-  const enrolled = Boolean(course.viewer.enrollment && ["Active", "Completed"].includes(course.viewer.enrollment.status));
-  const instructors = course.instructors.map((item) => `${item.firstName} ${item.lastName}`).join(", ") || "Giảng viên EduLine";
-  return <main className="min-h-screen bg-[#f7f9fc]"><div className="mx-auto max-w-[1120px] px-5 py-8 sm:px-8"><Link to="/courses" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-blue-600"><ArrowLeft size={16} />Danh mục khóa học</Link><section className="mt-5 grid overflow-hidden rounded-3xl bg-white shadow-sm lg:grid-cols-[1.25fr_.75fr]"><div className="p-6 sm:p-10"><span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">{course.category || course.difficultyLevel}</span><h1 className="mt-5 text-3xl font-extrabold leading-tight text-slate-900 sm:text-4xl">{course.title}</h1><p className="mt-4 text-slate-600">{course.shortSummary || "Khóa học trực tuyến giúp bạn xây dựng kiến thức và kỹ năng qua từng bài học."}</p><p className="mt-5 text-sm text-slate-500">Giảng viên: <span className="font-semibold text-slate-700">{instructors}</span></p><div className="mt-7 flex flex-wrap gap-5 text-sm text-slate-500"><span className="inline-flex items-center gap-2"><BookOpen size={17} />{course.stats.lessonCount} bài học</span><span className="inline-flex items-center gap-2"><Clock3 size={17} />{Math.floor(course.stats.totalDurationMinutes / 60)} giờ học</span><span>{course.stats.studentCount} học viên</span></div></div><div className="bg-blue-50 p-5 sm:p-7"><img src={course.thumbnailUrl || "/images/student-learning.png"} alt="" className="aspect-video w-full rounded-2xl object-cover" />{enrolled ? <div className="mt-5 rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800"><CheckCircle2 size={18} className="mr-2 inline" />Bạn đã đăng ký khóa học này.<Link to="/dashboard" className="mt-3 flex items-center gap-2 text-blue-700">Quay lại dashboard <ArrowRight size={16} /></Link></div> : <form onSubmit={enroll} className="mt-5 space-y-3">{course.requiresPassword && <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Mật khẩu khóa học</span><span className="relative block"><LockKeyhole size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><input required type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm outline-none focus:border-blue-500" /></span></label>}<button disabled={enrolling} className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60">{enrolling ? "Đang đăng ký…" : user ? "Đăng ký khóa học" : "Đăng nhập để đăng ký"}</button></form>}</div></section><section className="mt-8 rounded-2xl border border-slate-100 bg-white p-6 sm:p-8"><h2 className="text-xl font-extrabold text-slate-900">Nội dung khóa học</h2>{course.modules.length ? <div className="mt-5 divide-y divide-slate-100">{course.modules.map((module, index) => <details key={module.id} open={index === 0} className="py-4"><summary className="cursor-pointer font-bold text-slate-800">Chương {index + 1}: {module.title}<span className="ml-2 text-xs font-normal text-slate-400">{module.lessons.length} bài học</span></summary><ul className="mt-3 space-y-2 pl-5">{module.lessons.map((lesson) => <li key={lesson.id} className="flex items-center justify-between gap-3 text-sm text-slate-600"><span>{lesson.title}</span><span className="shrink-0 text-xs text-slate-400">{lesson.estimatedDurationMinutes ? `${lesson.estimatedDurationMinutes} phút` : lesson.type}</span></li>)}</ul></details>)}</div> : <p className="mt-4 text-sm text-slate-500">Nội dung bài học sẽ được cập nhật sớm.</p>}</section>{error && <p role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</p>}</div></main>;
+  const onEnroll = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    void run(
+      () =>
+        enroll(
+          course.id,
+          course.requiresPassword ? password : undefined,
+          wantNotifications ? "Granted" : "Denied",
+        ),
+      "Đăng ký thành công! Khóa học đã có trong “Khóa học của tôi”.",
+    );
+  };
+
+  let body: ReactNode;
+
+  if (!user) {
+    body = (
+      <>
+        <p className="text-sm text-slate-600">Đăng nhập bằng tài khoản học viên để đăng ký khóa học.</p>
+        <Link
+          to="/login"
+          state={{ from: location.pathname }}
+          className="mt-4 flex h-12 items-center justify-center rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700"
+        >
+          Đăng nhập để đăng ký
+        </Link>
+      </>
+    );
+  } else if (course.viewer.isStaff) {
+    body = (
+      <>
+        <p className="text-sm text-slate-600">
+          {user.accountType === "Admin" ? "Bạn là Admin." : "Bạn là giảng viên của khóa học này."}
+        </p>
+        <Link
+          to={`/instructor/courses/${course.id}`}
+          className="mt-4 flex h-12 items-center justify-center rounded-xl bg-slate-900 font-semibold text-white hover:bg-slate-800"
+        >
+          Quản lý khóa học
+        </Link>
+      </>
+    );
+  } else if (user.accountType !== "Student") {
+    body = <p className="text-sm text-slate-600">Chỉ tài khoản học viên mới đăng ký được khóa học.</p>;
+  } else if (enrollment && enrollment.status !== "Dropped") {
+    body = (
+      <>
+        <span className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${ENROLLMENT_BADGE[enrollment.status]}`}>
+          {ENROLLMENT_LABEL[enrollment.status]}
+        </span>
+        {enrollment.status === "Active" && (
+          <>
+            {progress && (
+              <div className="mt-4">
+                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-blue-600" style={{ width: `${progress.progressPercentage}%` }} />
+                </div>
+                <p className="mt-1.5 text-xs text-slate-500">Hoàn thành {progress.progressPercentage}%</p>
+              </div>
+            )}
+            {firstLessonId && (
+              <Link
+                to={`/courses/${course.slug}/lessons/${progress?.resumeLessonId ?? firstLessonId}`}
+                className="mt-4 flex h-12 items-center justify-center rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700"
+              >
+                {progress && progress.completedLessonIds.length > 0 ? "Tiếp tục học" : "Bắt đầu học"}
+              </Link>
+            )}
+            {confirmDrop ? (
+              <div className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-800">
+                Hủy đăng ký khóa học này?
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => run(() => dropCourse(course.id), "Đã hủy đăng ký.")}
+                    className="rounded-lg bg-red-600 px-3 py-1.5 font-semibold text-white disabled:opacity-60"
+                  >
+                    Hủy đăng ký
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDrop(false)}
+                    className="rounded-lg bg-white px-3 py-1.5 font-semibold text-slate-700"
+                  >
+                    Không
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmDrop(true)}
+                className="mt-3 w-full text-sm font-semibold text-slate-500 hover:text-red-600"
+              >
+                Hủy đăng ký
+              </button>
+            )}
+          </>
+        )}
+        {enrollment.status === "Completed" && (
+          <>
+            <p className="mt-3 text-sm text-slate-600">
+              Bạn đã hoàn thành khóa học. Bạn vẫn xem được nội dung và kết quả của mình.
+            </p>
+            {firstLessonId && (
+              <Link
+                to={`/courses/${course.slug}/lessons/${firstLessonId}`}
+                className="mt-4 flex h-12 items-center justify-center rounded-xl border border-slate-200 font-semibold text-slate-800 hover:bg-slate-50"
+              >
+                Xem lại bài học
+              </Link>
+            )}
+          </>
+        )}
+        {(enrollment.status === "Active" || enrollment.status === "Completed") && (
+          <CourseNotificationToggle courseId={course.id} />
+        )}
+        {enrollment.status === "Suspended" && (
+          <p className="mt-3 text-sm text-slate-600">
+            Bạn đã bị đình chỉ khỏi khóa học này. Liên hệ giảng viên nếu cần hỗ trợ.
+          </p>
+        )}
+      </>
+    );
+  } else if (!published) {
+    body = <p className="text-sm text-slate-600">Khóa học này hiện không mở đăng ký.</p>;
+  } else {
+    body = (
+      <form onSubmit={onEnroll}>
+        {notOpenYet && (
+          <p className="mb-3 flex items-center gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+            <CalendarClock size={16} /> Mở đăng ký từ {formatDate(course.enrollmentOpensAt!)}.
+          </p>
+        )}
+        {closed && (
+          <p className="mb-3 rounded-lg bg-slate-100 p-3 text-sm text-slate-600">
+            Đã hết hạn đăng ký ({formatDate(course.enrollmentClosesAt!)}).
+          </p>
+        )}
+        {course.prerequisites.length > 0 && (
+          <div className="mb-3 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
+            Cần hoàn thành trước:
+            <ul className="mt-1 list-inside list-disc">
+              {course.prerequisites.map((p) => (
+                <li key={p.id}>
+                  <Link to={`/courses/${p.slug}`} className="font-semibold hover:underline">
+                    {p.title}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {course.requiresPassword && (
+          <div className="mb-3">
+            <label htmlFor="course-password" className="mb-1.5 block text-sm font-semibold text-slate-700">
+              Mật khẩu khóa học
+            </label>
+            <input
+              id="course-password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Do giảng viên cung cấp"
+              className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+        )}
+        <label className="mb-3 flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={wantNotifications}
+            onChange={(e) => setWantNotifications(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            Nhận thông báo từ khóa học này
+            <span className="block text-xs text-slate-500">
+              Bài tập mới và nhắc hạn nộp. Điểm và tin nhắn riêng luôn được gửi.
+            </span>
+          </span>
+        </label>
+        <button
+          type="submit"
+          disabled={busy || Boolean(notOpenYet) || Boolean(closed)}
+          className="flex h-12 w-full items-center justify-center rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy ? "Đang xử lý…" : enrollment?.status === "Dropped" ? "Đăng ký lại" : "Đăng ký học miễn phí"}
+        </button>
+      </form>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <p className="text-2xl font-extrabold text-blue-600">Miễn phí</p>
+      <div className="mt-4">{body}</div>
+      {message && <p className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
+      {error && <p className="mt-3 whitespace-pre-line rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</p>}
+    </div>
+  );
 }

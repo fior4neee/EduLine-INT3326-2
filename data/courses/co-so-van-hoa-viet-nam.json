@@ -1,0 +1,81 @@
+{
+  "slug": "co-so-van-hoa-viet-nam",
+  "title": "Cơ sở văn hóa Việt Nam",
+  "shortSummary": "Khái niệm văn hóa, không gian và chủ thể văn hóa Việt Nam, văn hóa lúa nước, tam giáo, tín ngưỡng và lễ hội.",
+  "category": "Văn hóa",
+  "difficultyLevel": "College",
+  "instructor": "ha.pham",
+  "thumbnailUrl": "/images/courses/co-so-van-hoa-viet-nam.svg",
+  "hasCertificate": false,
+  "welcomeMessage": "Chào mừng bạn đến với khóa Cơ sở văn hóa Việt Nam! Hãy thử tìm ví dụ cho mỗi bài học ngay trong gia đình và quê hương của bạn.",
+  "vmluSubject": "46",
+  "sources": [
+    {
+      "title": "Văn hóa Việt Nam",
+      "author": "Wikipedia tiếng Việt",
+      "url": "https://vi.wikipedia.org/wiki/Văn_hóa_Việt_Nam",
+      "license": "CC BY-SA 4.0"
+    }
+  ],
+  "modules": [
+    {
+      "title": "Chương 1: Văn hóa và văn hóa học",
+      "lessons": [
+        { "title": "Video: Giới thiệu khóa học", "type": "Video", "minutes": 8, "isPreview": true },
+        {
+          "title": "Văn hóa và bản sắc văn hóa",
+          "type": "Text",
+          "minutes": 10,
+          "text": "Văn hóa là hệ thống các giá trị vật chất và tinh thần do con người sáng tạo và tích lũy qua quá trình hoạt động thực tiễn, trong sự tương tác giữa con người với môi trường tự nhiên và xã hội.\n\nTheo UNESCO, văn hóa bao gồm các đặc trưng về tinh thần, vật chất, trí tuệ và cảm xúc của một xã hội hay một nhóm người, không chỉ gồm nghệ thuật và văn chương mà còn cả lối sống, cách chung sống, hệ giá trị, truyền thống và tín ngưỡng.\n\nCác đặc trưng của văn hóa:\n• Tính hệ thống: các yếu tố văn hóa liên hệ chặt chẽ với nhau.\n• Tính giá trị: văn hóa là thước đo mức độ nhân bản của xã hội.\n• Tính nhân sinh: văn hóa là sản phẩm do con người tạo ra, phân biệt với tự nhiên.\n• Tính lịch sử: văn hóa được tích lũy và truyền lại qua nhiều thế hệ.\n\nBản sắc văn hóa là tổng thể những nét riêng, đặc trưng và tương đối bền vững của văn hóa một cộng đồng, giúp phân biệt cộng đồng đó với các cộng đồng khác.\n\nCần phân biệt văn hóa với văn minh (trình độ phát triển, thiên về vật chất – kỹ thuật), văn hiến (văn hóa thiên về giá trị tinh thần, truyền thống lâu đời) và văn vật (văn hóa thiên về di tích, hiện vật)."
+        },
+        {
+          "title": "Chủ thể và không gian văn hóa Việt Nam",
+          "type": "Text",
+          "minutes": 12,
+          "text": "Chủ thể văn hóa Việt Nam là cộng đồng 54 dân tộc, trong đó người Kinh (Việt) chiếm khoảng 85% dân số. Các dân tộc thiểu số như Tày, Thái, Mường, Khmer, Hoa, Nùng, H'Mông, Chăm... đều có bản sắc riêng, góp phần tạo nên sự đa dạng trong thống nhất của văn hóa Việt Nam.\n\nVề không gian, Việt Nam nằm ở Đông Nam Á, khí hậu nhiệt đới gió mùa, nóng ẩm, nhiều sông ngòi. Nền tảng văn hóa gốc là văn hóa Đông Nam Á, thuộc loại hình văn hóa gốc nông nghiệp.\n\nCác vùng văn hóa thường được chia như sau:\n• Tây Bắc và Việt Bắc: văn hóa các dân tộc miền núi, ruộng bậc thang, nhà sàn.\n• Châu thổ Bắc Bộ: cái nôi của văn hóa Việt, nền văn minh sông Hồng, làng xã.\n• Trung Bộ: dấu ấn văn hóa Chăm Pa, kinh đô Huế.\n• Tây Nguyên: văn hóa cồng chiêng, nhà rông, sử thi.\n• Nam Bộ: vùng đất mở, giao thoa Việt – Khmer – Hoa – Chăm, văn hóa sông nước.\n\nTiến trình lịch sử văn hóa gồm các lớp: văn hóa bản địa (Đông Sơn, Sa Huỳnh, Óc Eo), lớp giao lưu với Trung Hoa và khu vực, và lớp giao lưu với phương Tây từ thế kỷ XVII trở đi."
+        }
+      ]
+    },
+    {
+      "title": "Chương 2: Đặc trưng và giao lưu văn hóa",
+      "lessons": [
+        {
+          "title": "Văn hóa nông nghiệp lúa nước",
+          "type": "Text",
+          "minutes": 12,
+          "text": "Nghề trồng lúa nước đã chi phối sâu sắc lối sống và tư duy của người Việt.\n\nNhững đặc điểm của văn hóa gốc nông nghiệp:\n• Sống định cư, gắn bó với làng xã. Làng là đơn vị cơ bản của xã hội truyền thống, với cây đa, giếng nước, sân đình.\n• Tính cộng đồng cao: mọi người cùng làm thủy lợi, cùng chống thiên tai. Mặt trái là tâm lý dựa dẫm, đố kỵ, \"cào bằng\".\n• Tính tự trị của làng: mỗi làng có hương ước riêng. Câu \"phép vua thua lệ làng\" phản ánh điều này.\n• Tư duy tổng hợp, biện chứng, coi trọng các mối quan hệ, ưa sự hài hòa.\n• Lối sống trọng tình hơn trọng lý, trọng văn hơn trọng võ, trọng nữ, ứng xử mềm dẻo, linh hoạt.\n• Tôn trọng và sống hòa hợp với tự nhiên, thể hiện qua các tín ngưỡng thờ trời, đất, nước, các vị thần nông nghiệp.\n\nLịch sinh hoạt gắn với mùa vụ: lễ hội thường diễn ra vào mùa xuân và mùa thu, sau khi thu hoạch, lúc nông nhàn.\n\nBữa ăn truyền thống theo cơ cấu cơm – rau – cá, phản ánh rõ nguồn sống từ đồng ruộng và sông nước."
+        },
+        {
+          "title": "Tam giáo và chữ viết",
+          "type": "Text",
+          "minutes": 12,
+          "text": "Trong quá trình giao lưu với Trung Hoa và Ấn Độ, ba tôn giáo – học thuyết lớn đã du nhập và hòa quyện vào văn hóa Việt, tạo nên hiện tượng \"tam giáo đồng nguyên\":\n• Phật giáo: vào Việt Nam từ đầu Công nguyên, qua cả đường biển từ Ấn Độ và đường bộ từ Trung Hoa. Trung tâm Luy Lâu (Bắc Ninh) là một trong những trung tâm Phật giáo sớm nhất khu vực.\n• Nho giáo: theo chân chính quyền phương Bắc, phát triển mạnh từ thời Lê sơ, trở thành hệ tư tưởng chính thống của nhà nước phong kiến. Nho giáo đề cao trung, hiếu, lễ, nghĩa và việc học hành, thi cử.\n• Đạo giáo: hòa nhập với tín ngưỡng dân gian, thể hiện trong các hình thức bùa chú, đồng bóng, thờ các vị thần tiên.\n\nTiến trình chữ viết:\n• Chữ Hán: chữ viết chính thức trong hành chính, khoa cử suốt nhiều thế kỷ.\n• Chữ Nôm: do người Việt sáng tạo dựa trên chữ Hán để ghi tiếng Việt. Nhiều tác phẩm lớn như Truyện Kiều của Nguyễn Du được viết bằng chữ Nôm.\n• Chữ Quốc ngữ: dùng chữ cái Latinh, hình thành từ thế kỷ XVII với công lao của các giáo sĩ phương Tây. Ngày nay là chữ viết chính thức của Việt Nam."
+        },
+        {
+          "title": "Phật giáo thời Lý – Trần và An Nam tứ đại khí",
+          "type": "Text",
+          "minutes": 10,
+          "text": "Thời Lý (1009–1225) và Trần (1225–1400) là giai đoạn cực thịnh của Phật giáo Việt Nam. Nhiều nhà vua, hoàng thân theo đạo Phật. Vua Trần Nhân Tông sau khi nhường ngôi đã xuất gia và sáng lập Thiền phái Trúc Lâm Yên Tử, một dòng thiền mang đậm tinh thần nhập thế của người Việt.\n\nDấu ấn tiêu biểu của thời kỳ này là \"An Nam tứ đại khí\", bốn công trình bằng đồng lớn, đều là di sản của văn hóa Phật giáo:\n• Tháp Báo Thiên ở kinh thành Thăng Long.\n• Tượng Phật chùa Quỳnh Lâm (Quảng Ninh).\n• Chuông Quy Điền (chuông chùa Một Cột).\n• Vạc Phổ Minh ở chùa Phổ Minh (Nam Định).\n\nĐáng tiếc là cả bốn công trình đều không còn. Nhiều tư liệu cho rằng chúng bị quân Minh phá hủy, lấy đồng đúc vũ khí trong thời kỳ đô hộ đầu thế kỷ XV.\n\nCác công trình kiến trúc Phật giáo nổi tiếng còn lại đến nay gồm chùa Một Cột (Diên Hựu), chùa Dâu, chùa Phật Tích, chùa Keo và quần thể Yên Tử."
+        }
+      ]
+    },
+    {
+      "title": "Chương 3: Tín ngưỡng, lễ hội và ôn tập",
+      "lessons": [
+        {
+          "title": "Tín ngưỡng dân gian",
+          "type": "Text",
+          "minutes": 12,
+          "text": "Các tín ngưỡng tiêu biểu của người Việt:\n\n• Tín ngưỡng phồn thực: cầu mong sự sinh sôi nảy nở của con người và mùa màng. Thể hiện qua thờ sinh thực khí, các hình ảnh trên trống đồng, tục giã cối đón dâu.\n• Tín ngưỡng sùng bái tự nhiên: thờ các nữ thần Mây, Mưa, Sấm, Chớp (Tứ Pháp), thờ Mẫu, thờ động vật và thực vật như rắn, cây đa, cây lúa.\n• Thờ cúng tổ tiên: tín ngưỡng phổ biến nhất. Gần như nhà nào cũng có bàn thờ tổ tiên, thể hiện đạo hiếu và tư tưởng \"uống nước nhớ nguồn\". Ngày giỗ được coi trọng hơn ngày sinh.\n• Thờ Thổ Công (thần đất trong nhà), Thành Hoàng làng (vị thần bảo hộ cả làng, thờ ở đình), và thờ vua – thờ anh hùng dân tộc như Hùng Vương, Trần Hưng Đạo.\n• Tín ngưỡng thờ Mẫu Tam phủ, Tứ phủ: được UNESCO công nhận là di sản văn hóa phi vật thể đại diện của nhân loại năm 2016.\n\nĐặc điểm chung của tín ngưỡng Việt là tính đa thần, tính dung hợp và tôn vinh vai trò của người phụ nữ."
+        },
+        {
+          "title": "Lễ hội và phong tục",
+          "type": "Text",
+          "minutes": 12,
+          "text": "Lễ hội truyền thống gồm hai phần:\n• Phần lễ: nghi thức tế lễ, rước thần, cầu mong mưa thuận gió hòa, mùa màng bội thu, tưởng nhớ công ơn các vị thần, anh hùng.\n• Phần hội: các trò chơi và sinh hoạt cộng đồng như đấu vật, kéo co, đánh đu, hát quan họ, đua thuyền, chọi gà.\n\nMột số lễ hội tiêu biểu: Giỗ Tổ Hùng Vương (10/3 âm lịch), hội Gióng (được UNESCO công nhận năm 2010), hội chùa Hương, hội Lim, lễ hội Bà Chúa Xứ núi Sam.\n\nCác ngày tết trong năm theo âm lịch:\n• Tết Nguyên đán: tết lớn nhất, đón năm mới, đoàn tụ gia đình, cúng tổ tiên, chúc tết, lì xì.\n• Tết Nguyên tiêu (rằm tháng Giêng), Tết Hàn thực (3/3), Tết Đoan ngọ (5/5), lễ Vu lan (rằm tháng Bảy), Tết Trung thu (rằm tháng Tám), Tết ông Công ông Táo (23 tháng Chạp).\n\nPhong tục vòng đời: hôn nhân truyền thống với các lễ dạm ngõ, ăn hỏi, cưới; tang ma thể hiện quan niệm \"sống gửi thác về\" và đạo hiếu với cha mẹ.\n\nGiao tiếp: người Việt coi trọng chữ \"lễ\", xưng hô theo quan hệ họ hàng (anh, chị, cô, chú...) ngay cả với người ngoài, ưa nói vòng, tế nhị và giữ thể diện."
+        },
+        { "title": "Bài kiểm tra cuối khóa (VMLU)", "type": "Quiz", "minutes": 20, "quizTitle": "Kiểm tra: Cơ sở văn hóa Việt Nam" }
+      ]
+    }
+  ]
+}

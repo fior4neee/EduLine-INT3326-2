@@ -37,6 +37,7 @@ npx prisma generate
 npx prisma migrate deploy                       # create the tables
 npm run seed                                    # create the Admin account (admin / Admin#2026)
 npm run seed:demo                               # optional: demo instructors, student and 8 courses
+npm run seed:catalog                            # optional: 5 VMLU-topic courses from data/courses/*.json
 npm run start:dev                               # http://localhost:8000/api/v1
 
 ### Powershell
@@ -60,6 +61,9 @@ npm run seed
 
 # Optional: Add demo instructors, student, and 8 courses
 npm run seed:demo
+
+# Optional: Add 5 courses (C, networking, statistics, macroeconomics, Vietnamese culture) with VMLU quizzes
+npm run seed:catalog
 
 # Start the application in development mode
 npm run start:dev

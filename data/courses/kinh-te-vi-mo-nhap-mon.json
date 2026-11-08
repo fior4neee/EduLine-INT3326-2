@@ -1,0 +1,81 @@
+{
+  "slug": "kinh-te-vi-mo-nhap-mon",
+  "title": "Kinh tế vĩ mô nhập môn",
+  "shortSummary": "GDP, thất nghiệp, lạm phát, tổng cung – tổng cầu, chính sách tiền tệ và tài khóa, cán cân thương mại và tỷ giá.",
+  "category": "Kinh tế",
+  "difficultyLevel": "College",
+  "instructor": "anh.tran",
+  "thumbnailUrl": "/images/courses/kinh-te-vi-mo-nhap-mon.svg",
+  "hasCertificate": true,
+  "welcomeMessage": "Chào mừng bạn đến với khóa Kinh tế vĩ mô nhập môn! Hãy thử liên hệ mỗi bài học với tin tức kinh tế bạn đọc hằng ngày.",
+  "vmluSubject": "28",
+  "sources": [
+    {
+      "title": "Principles of Macroeconomics 3e",
+      "author": "OpenStax (Rice University)",
+      "url": "https://openstax.org/details/books/principles-macroeconomics-3e",
+      "license": "CC BY 4.0"
+    }
+  ],
+  "modules": [
+    {
+      "title": "Chương 1: Đo lường nền kinh tế",
+      "lessons": [
+        { "title": "Video: Kinh tế vĩ mô là gì?", "type": "Video", "minutes": 8, "isPreview": true },
+        {
+          "title": "Đối tượng của kinh tế vĩ mô",
+          "type": "Text",
+          "minutes": 10,
+          "text": "Kinh tế vi mô nghiên cứu hành vi của từng hộ gia đình và doanh nghiệp. Kinh tế vĩ mô nghiên cứu nền kinh tế như một tổng thể.\n\nBốn mục tiêu vĩ mô chính:\n• Tăng trưởng kinh tế: sản lượng (GDP thực tế) tăng ổn định theo thời gian.\n• Việc làm đầy đủ: tỷ lệ thất nghiệp thấp, gần mức tự nhiên.\n• Ổn định giá cả: lạm phát thấp và ổn định.\n• Cân bằng bên ngoài: cán cân thanh toán và tỷ giá hối đoái ổn định.\n\nHai nhóm công cụ chính sách:\n• Chính sách tài khóa: chính phủ thay đổi chi tiêu (G) và thuế (T).\n• Chính sách tiền tệ: ngân hàng trung ương điều chỉnh lượng cung tiền và lãi suất.\n\nCác mục tiêu này đôi khi mâu thuẫn. Ví dụ, kích thích kinh tế để giảm thất nghiệp có thể làm tăng lạm phát. Nhà hoạch định chính sách phải cân nhắc đánh đổi giữa các mục tiêu."
+        },
+        {
+          "title": "GDP và cách tính tăng trưởng",
+          "type": "Text",
+          "minutes": 15,
+          "text": "Tổng sản phẩm quốc nội (GDP) là tổng giá trị thị trường của tất cả hàng hóa và dịch vụ cuối cùng được sản xuất trong lãnh thổ một nước trong một thời kỳ (thường là một năm).\n\nTính GDP theo phương pháp chi tiêu:\nGDP = C + I + G + (X − M)\n• C: tiêu dùng của hộ gia đình\n• I: đầu tư của doanh nghiệp (máy móc, nhà xưởng, hàng tồn kho)\n• G: chi mua hàng hóa, dịch vụ của chính phủ (không tính chi chuyển nhượng như trợ cấp)\n• X − M: xuất khẩu ròng\n\nGDP danh nghĩa tính theo giá hiện hành. GDP thực tế tính theo giá của năm gốc, nên loại bỏ được ảnh hưởng của lạm phát.\nChỉ số giảm phát GDP = GDP danh nghĩa / GDP thực tế × 100.\n\nGNP (hay GNI) = GDP + thu nhập ròng từ nước ngoài, tính theo quyền sở hữu của công dân thay vì theo lãnh thổ.\n\nTỷ lệ tăng trưởng = (GDP thực năm t − GDP thực năm t−1) / GDP thực năm t−1 × 100%.\nVí dụ: GDP bình quân thực tế năm 2000 là 18.073 USD, năm 2001 là 18.635 USD. Tốc độ tăng trưởng = (18.635 − 18.073) / 18.073 ≈ 3,1%."
+        }
+      ]
+    },
+    {
+      "title": "Chương 2: Thất nghiệp, lạm phát và tổng cung – tổng cầu",
+      "lessons": [
+        {
+          "title": "Thất nghiệp",
+          "type": "Text",
+          "minutes": 12,
+          "text": "Lực lượng lao động gồm những người trong độ tuổi lao động đang có việc làm hoặc đang tích cực tìm việc. Người không tìm việc (sinh viên đi học, người nội trợ, người đã nghỉ hưu) không thuộc lực lượng lao động.\n\nTỷ lệ thất nghiệp = số người thất nghiệp / lực lượng lao động × 100%.\n\nCác loại thất nghiệp:\n• Thất nghiệp tạm thời (cọ xát): người lao động đang chuyển việc hoặc mới tốt nghiệp, đang tìm việc phù hợp.\n• Thất nghiệp cơ cấu: kỹ năng của người lao động không khớp với nhu cầu, ví dụ do công nghệ thay đổi hoặc ngành nghề suy giảm.\n• Thất nghiệp chu kỳ: phát sinh khi nền kinh tế suy thoái, tổng cầu giảm.\n\nTỷ lệ thất nghiệp tự nhiên = thất nghiệp tạm thời + thất nghiệp cơ cấu. Đây là mức thất nghiệp khi thị trường lao động cân bằng.\n\nTrạng thái toàn dụng nhân công (việc làm đầy đủ) không có nghĩa là không còn ai thất nghiệp. Nó có nghĩa là thất nghiệp chỉ ở mức tự nhiên, không có thất nghiệp chu kỳ. Khi đó nền kinh tế vẫn có thể có một tỷ lệ lạm phát nhất định.\n\nĐịnh luật Okun: khi thất nghiệp thực tế cao hơn mức tự nhiên 1 điểm phần trăm, sản lượng thực tế thấp hơn sản lượng tiềm năng khoảng 2–2,5%."
+        },
+        {
+          "title": "Lạm phát và chỉ số giá tiêu dùng",
+          "type": "Text",
+          "minutes": 12,
+          "text": "Lạm phát là sự tăng lên liên tục của mức giá chung theo thời gian.\n\nChỉ số giá tiêu dùng (CPI) đo chi phí của một giỏ hàng hóa, dịch vụ cố định mà một hộ gia đình điển hình mua, so với năm gốc:\nCPI năm t = chi phí giỏ hàng năm t / chi phí giỏ hàng năm gốc × 100\nTỷ lệ lạm phát = (CPIₜ − CPIₜ₋₁) / CPIₜ₋₁ × 100%\n\nNguyên nhân của lạm phát:\n• Lạm phát do cầu kéo: tổng cầu tăng nhanh hơn khả năng sản xuất, ví dụ do chi tiêu chính phủ tăng mạnh hoặc in thêm tiền.\n• Lạm phát do chi phí đẩy: chi phí sản xuất tăng (giá xăng dầu, tiền lương, nguyên liệu nhập khẩu) làm tổng cung giảm.\n• Theo thuyết số lượng tiền tệ (MV = PY): cung tiền tăng nhanh hơn sản lượng thì giá cả sẽ tăng.\n\nTác hại: thu nhập thực tế của người có lương cố định giảm, người cho vay bị thiệt, giá cả khó dự đoán làm doanh nghiệp ngại đầu tư.\n\nLãi suất thực ≈ lãi suất danh nghĩa − tỷ lệ lạm phát."
+        },
+        {
+          "title": "Mô hình tổng cung – tổng cầu (AD–AS)",
+          "type": "Text",
+          "minutes": 12,
+          "text": "Tổng cầu (AD) là tổng lượng hàng hóa, dịch vụ mà mọi tác nhân trong nền kinh tế muốn mua ở mỗi mức giá chung: AD = C + I + G + NX. Đường AD dốc xuống: khi mức giá giảm, của cải thực tế tăng, lãi suất giảm, hàng trong nước rẻ hơn hàng ngoại, nên lượng cầu tăng.\n\nTổng cung (AS) là tổng lượng hàng hóa, dịch vụ mà doanh nghiệp muốn sản xuất ở mỗi mức giá.\n• Trong ngắn hạn, AS dốc lên vì tiền lương và một số giá khác chậm điều chỉnh.\n• Trong dài hạn, AS thẳng đứng tại mức sản lượng tiềm năng, do nguồn lực và công nghệ quyết định.\n\nCác cú sốc:\n• AD tăng (chính phủ tăng chi tiêu, giảm thuế, cung tiền tăng): sản lượng tăng và giá tăng.\n• AS giảm (giá dầu tăng mạnh): sản lượng giảm và giá tăng cùng lúc. Hiện tượng này gọi là lạm phát đình trệ (stagflation).\n\nMô hình AD–AS giúp giải thích vì sao các chính sách kích cầu có thể giảm thất nghiệp trong ngắn hạn nhưng gây lạm phát nếu sản lượng vượt mức tiềm năng."
+        }
+      ]
+    },
+    {
+      "title": "Chương 3: Chính sách kinh tế vĩ mô và ôn tập",
+      "lessons": [
+        {
+          "title": "Ngân hàng trung ương và chính sách tiền tệ",
+          "type": "Text",
+          "minutes": 15,
+          "text": "Ngân hàng trung ương (NHTW, ở Việt Nam là Ngân hàng Nhà nước) kiểm soát cung tiền.\n\nCơ sở tiền tệ (tiền mạnh, MB) = tiền mặt trong lưu thông + dự trữ của các ngân hàng thương mại.\nCung tiền M = số nhân tiền × MB.\n\nCông cụ của chính sách tiền tệ:\n• Nghiệp vụ thị trường mở: NHTW mua trái phiếu thì bơm tiền ra, cơ sở tiền tệ tăng; bán trái phiếu thì hút tiền về.\n• Tỷ lệ dự trữ bắt buộc: hạ tỷ lệ thì số nhân tiền tăng, cung tiền tăng.\n• Lãi suất chiết khấu/tái cấp vốn: hạ lãi suất khuyến khích ngân hàng vay NHTW nhiều hơn.\n• Cho các ngân hàng thương mại vay, hoặc mua ngoại tệ, đều làm tăng cơ sở tiền tệ. Bán ngoại tệ thì làm giảm.\n\nHai hướng chính sách:\n• Mở rộng (nới lỏng): tăng cung tiền, giảm lãi suất, kích thích đầu tư và tiêu dùng. Dùng khi kinh tế suy thoái.\n• Thu hẹp (thắt chặt): giảm cung tiền, tăng lãi suất. Dùng khi nền kinh tế có lạm phát cao."
+        },
+        {
+          "title": "Chính sách tài khóa, thương mại và tỷ giá",
+          "type": "Text",
+          "minutes": 15,
+          "text": "Chính sách tài khóa:\n• Mở rộng: tăng chi tiêu chính phủ (G) hoặc giảm thuế (T) để tăng tổng cầu khi suy thoái.\n• Thu hẹp: giảm chi tiêu ngân sách và tăng thuế để kiềm chế lạm phát.\n• Số nhân chi tiêu: 1 đồng chi tiêu của chính phủ có thể làm GDP tăng hơn 1 đồng, vì thu nhập tăng lại dẫn đến tiêu dùng tăng.\n• Thâm hụt ngân sách xảy ra khi chi tiêu lớn hơn thu thuế. Vay nợ để bù thâm hụt có thể đẩy lãi suất lên, làm giảm đầu tư tư nhân (hiện tượng lấn át – crowding out).\n\nCán cân thương mại = xuất khẩu − nhập khẩu. Thâm hụt thương mại có thể do: thu nhập trong nước tăng làm nhập khẩu tăng, đồng nội tệ lên giá làm hàng trong nước đắt hơn với người nước ngoài, hoặc thu nhập của các nước đối tác giảm làm xuất khẩu giảm.\n\nTỷ giá hối đoái là giá của một đơn vị ngoại tệ tính bằng nội tệ.\n• Trong cơ chế tỷ giá thả nổi, tỷ giá do cung cầu ngoại tệ quyết định.\n• Trong cơ chế tỷ giá cố định, NHTW phải can thiệp để giữ tỷ giá. Khi dư cung ngoại tệ, NHTW dùng nội tệ mua vào lượng ngoại tệ dư thừa. Khi dư cầu ngoại tệ, NHTW bán ngoại tệ từ dự trữ ra."
+        },
+        { "title": "Bài kiểm tra cuối khóa (VMLU)", "type": "Quiz", "minutes": 20, "quizTitle": "Kiểm tra: Kinh tế vĩ mô" }
+      ]
+    }
+  ]
+}

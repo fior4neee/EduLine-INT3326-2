@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 450" width="720" height="450">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#78350f"/><stop offset="1" stop-color="#d97706"/></linearGradient></defs>
+  <rect width="720" height="450" fill="url(#g)"/>
+  <circle cx="690" cy="-20" r="160" fill="#ffffff" opacity="0.06"/>
+  <circle cx="-30" cy="470" r="200" fill="#ffffff" opacity="0.05"/>
+  <polyline points="430,320 490,280 540,295 590,220 640,240 700,150" fill="none" stroke="#fef3c7" stroke-width="6" stroke-linejoin="round"/>
+      <polygon points="700,150 676,158 692,176" fill="#fef3c7"/>
+      <text x="440" y="180" font-family="system-ui,sans-serif" font-size="56" font-weight="800" fill="#ffffff" opacity="0.2">GDP</text>
+      <line x1="420" y1="335" x2="710" y2="335" stroke="#fde68a" stroke-width="3"/>
+  <g font-family="system-ui,'Segoe UI',Roboto,Arial,sans-serif" fill="#ffffff">
+    <rect x="48" y="60" rx="14" width="127" height="34" fill="#ffffff" opacity="0.18"/>
+    <text x="66" y="83" font-size="17" font-weight="700" letter-spacing="1.5">KINH TẾ</text>
+    <text x="48" y="300" font-size="44" font-weight="800">Kinh tế vĩ mô</text>
+    <text x="48" y="354" font-size="44" font-weight="800">nhập môn</text>
+    <text x="48" y="398" font-size="18" opacity="0.8">EduLine · Dữ liệu VMLU</text>
+  </g>
+</svg>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { Link } from "react-router-dom";
 import { ArrowRight, BookOpen, CheckCircle2, Clock3, GraduationCap, LibraryBig, RefreshCw, Sparkles } from "lucide-react";
 import { useAuth } from "../auth/auth-context";
-import { getErrorMessage } from "../services/auth";
+import { getErrorMessage } from "../services/api";
 import { listCatalog, listMyCourses, type Course, type MyCourse } from "../services/courses";
 
 const fallbackImage = "/images/student-learning.png";
