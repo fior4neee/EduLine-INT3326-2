@@ -5,6 +5,11 @@ import HeroSection from "./components/heroSection";
 import FeaturedCourses from "./components/featuredCourse";
 import LoginPage from "./pages/loginPage";
 import RegisterPage from "./pages/registerPage";
+import StudentDashboardPage from "./pages/studentDashboardPage";
+import RequireAuth from "./auth/RequireAuth";
+import { AuthProvider } from "./auth/AuthProvider";
+import CoursesPage from "./pages/coursesPage";
+import CourseDetailPage from "./pages/courseDetailPage";
 
 function HomePage() {
   return (
@@ -34,14 +39,17 @@ function PlaceholderPage({ title }: { title: string }) {
 
 export default function App() {
   return (
+    <AuthProvider>
     <BrowserRouter>
       <Routes>
         {/* Public pages with Navbar */}
         <Route element={<MainLayout />}>
           <Route path="/" element={<HomePage />} />
-          <Route path="/courses" element={<PlaceholderPage title="Khóa học" />} />
+          <Route path="/courses" element={<CoursesPage />} />
+          <Route path="/courses/:idOrSlug" element={<CourseDetailPage />} />
           <Route path="/instructors" element={<PlaceholderPage title="Giảng viên" />} />
           <Route path="/about" element={<PlaceholderPage title="Về chúng tôi" />} />
+          <Route path="/dashboard" element={<RequireAuth studentOnly><StudentDashboardPage /></RequireAuth>} />
         </Route>
 
         {/* Authentication pages without Navbar */}
@@ -49,5 +57,6 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
       </Routes>
     </BrowserRouter>
+    </AuthProvider>
   );
 }
