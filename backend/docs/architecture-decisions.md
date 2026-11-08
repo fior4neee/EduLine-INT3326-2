@@ -12,6 +12,7 @@ Short records of why the system looks the way it does. Each one answers a questi
 | [006](#adr-006-cache-only-shared-read-heavy-data-and-measure-first) | Why Redis, and what is cached? | Accepted (order: Proposed) |
 | [007](#adr-007-frontend-as-a-static-spa-on-cloud-storage--cdn) | Why no Next.js server? | Proposed |
 | [008](#adr-008-access-token-in-the-authorization-header) | Header or cookie for the token? | Accepted |
+| [009](#adr-009-cloud-sql-access-by-identity-auth-proxy--iam-not-by-ip) | How does the API reach the DB, and who else can? | Accepted |
 
 ---
 
@@ -139,3 +140,25 @@ Week 5 question: *what is worth caching?*
 **Trade-off.** JavaScript can read the token, so an XSS bug could steal it. Mitigations: access token only in memory (15 min), React escaping, no `dangerouslySetInnerHTML` on user content, a strict Content-Security-Policy on the web bucket. Refresh token storage (memory = re-login on page reload, `localStorage` = survives reload but readable by XSS) is an M4 + M1 decision.
 
 **Action.** FE removes `withCredentials: true` (integration-review #2).
+
+---
+
+## ADR-009: Cloud SQL access by identity (Auth Proxy + IAM), not by IP
+
+Week 2/8 question: *how does the API reach the database, and who else can?*
+
+**Context.** Cloud SQL `eduline-db` has a public IP. Cloud Run has no fixed outbound IP, and team laptops change networks.
+
+| Option | How | Problem |
+|---|---|---|
+| Authorized networks (IP allow-list) | Open 5432 to listed IPs | Cloud Run IPs are not fixed, so the list would have to be `0.0.0.0/0`. Port 5432 exposed to the Internet; only the DB password protects it. |
+| Private IP + VPC connector | DB only inside the VPC | Extra cost (Serverless VPC Access / Direct VPC egress setup), laptops need a bastion or VPN for migrations |
+| **Auth Proxy + IAM (chosen)** | Authorized networks empty. Clients connect through the Cloud SQL connector, which checks IAM (`roles/cloudsql.client`) and opens an mTLS tunnel | Clients need the proxy (built into Cloud Run; one binary on laptops) |
+
+**Decision.** Authorized networks stay empty. Cloud Run `api` uses `--add-cloudsql-instances` (Unix socket at `/cloudsql/<connection name>`); laptops use `cloud-sql-proxy`. Verified: `Test-NetConnection <public ip> -Port 5432` → `TcpTestSucceeded: False`.
+
+**Defence in depth.** Three independent checks: network (no direct TCP), identity (IAM role on the caller's service account), database (user + password from Secret Manager).
+
+**Runtime identity.** Cloud Run runs as `sa-api`, not the default Compute Engine service account (which has project-wide Editor). `sa-api` has only `cloudsql.client` (project) and `secretmanager.secretAccessor` on each secret it reads.
+
+**Trade-offs.** The public IP still exists (not reachable, but visible); moving to private IP is a week 9/10 option if needed. Connection pool: `connection_limit` × Cloud Run `max-instances` must stay under the DB limit (5 × 3 = 15 for `db-f1-micro`).
