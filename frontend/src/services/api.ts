@@ -1,4 +1,5 @@
-import axios from "axios";
+import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
+import type { Session } from "./auth";
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
 
