@@ -139,6 +139,23 @@ const MESSAGES: Record<string, string> = {
   SUSPENSION_NOT_ALLOWED: "Chỉ đình chỉ được học viên đã đăng ký từ 2 lần trở lên và chưa hoàn thành khóa học.",
   NOT_SUSPENDED: "Học viên này không bị đình chỉ.",
   SLUG_TAKEN: "Đường dẫn (slug) này đã được khóa học khác dùng.",
+  LESSON_NOT_FOUND: "Không tìm thấy bài học.",
+  LESSON_LOCKED: "Hãy đăng ký khóa học để xem bài học này.",
+  PROGRESS_NOT_ALLOWED: "Tiến độ chỉ được lưu cho học viên đang học khóa này.",
+  LESSON_TYPE_NOT_SUPPORTED: "Loại bài học này không dùng thao tác đó.",
+  INVALID_PROGRESS: "Dữ liệu tiến độ không hợp lệ.",
+  ASSIGNMENT_NOT_FOUND: "Không tìm thấy bài tập.",
+  SUBMISSION_NOT_FOUND: "Không tìm thấy bài nộp.",
+  SUBMISSION_TYPE_NOT_ALLOWED: "Bài tập này không nhận hình thức nộp đó.",
+  FILE_TYPE_NOT_ALLOWED: "Loại tệp này không được chấp nhận.",
+  ASSIGNMENT_NOT_OPEN: "Bài tập chưa mở.",
+  ASSIGNMENT_CLOSED: "Đã hết hạn nộp và giảng viên không nhận bài muộn.",
+  ALREADY_GRADED: "Bài đã được chấm, không thể nộp lại.",
+  SUBMISSION_NOT_ALLOWED: "Chỉ học viên đang học khóa này mới nộp được bài.",
+  SCORE_OUT_OF_RANGE: "Điểm vượt quá điểm tối đa của bài tập.",
+  INVALID_ASSIGNMENT_DATES: "Ngày mở phải trước hạn nộp.",
+  COMMENT_NOT_ALLOWED: "Bạn không thể bình luận ở đây nữa.",
+  NOTIFICATION_NOT_FOUND: "Không tìm thấy thông báo.",
 };
 
 const FIELD_LABELS: Record<string, string> = {

@@ -12,3 +12,6 @@ process.env.NODE_ENV = 'test';
 process.env.JWT_ACCESS_SECRET ??= 'integration-test-secret-at-least-32-characters';
 process.env.RATE_LIMIT_MAX = '1000000';
 process.env.AUTH_RATE_LIMIT_MAX = '1000000';
+// Tests call OutboxProcessor.processPending() themselves.
+process.env.OUTBOX_POLL_INTERVAL_MS = '0';
+process.env.ASSIGNMENT_REMINDER_INTERVAL_MS = '0';

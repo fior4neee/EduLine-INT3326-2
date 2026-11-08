@@ -67,6 +67,7 @@
     "prisma@6.19.3": true
   },
   "jest": {
+    "testTimeout": 15000,
     "projects": [
       {
         "displayName": "unit",

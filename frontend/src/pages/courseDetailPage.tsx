@@ -32,6 +32,8 @@ import {
   type CourseDetail,
   type LessonType,
 } from "../services/courses";
+import { getCourseProgress, type CourseProgress } from "../services/lessons";
+import CourseNotificationToggle from "../components/courseNotificationToggle";
 
 const LESSON_ICON: Record<LessonType, typeof PlayCircle> = {
   Video: PlayCircle,
@@ -43,23 +45,29 @@ const LESSON_ICON: Record<LessonType, typeof PlayCircle> = {
 
 export default function CourseDetailPage() {
   const { idOrSlug = "" } = useParams();
-  const { user } = useAuth();
+  const { user, status: authStatus } = useAuth();
   const [course, setCourse] = useState<CourseDetail | null>(null);
+  const [progress, setProgress] = useState<CourseProgress | null>(null);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     try {
-      setCourse(await getCourse(idOrSlug));
+      const c = await getCourse(idOrSlug);
+      setCourse(c);
       setError("");
+      const status = c.viewer.enrollment?.status;
+      setProgress(status === "Active" || status === "Completed" ? await getCourseProgress(c.id) : null);
     } catch (err) {
       setError(getErrorMessage(err));
     }
   }, [idOrSlug]);
 
   // Reload when the user logs in or out: the enrollment box depends on who is viewing.
+  // Wait until a saved login is restored, or the first request runs as anonymous.
   useEffect(() => {
+    if (authStatus === "loading") return;
     void load();
-  }, [load, user?.id]);
+  }, [load, user?.id, authStatus]);
 
   if (error && !course) {
     return (
@@ -151,9 +159,15 @@ export default function CourseDetailPage() {
                   {m.lessons.map((l) => {
                     const Icon = LESSON_ICON[l.type];
                     const open = canSeeLessons || l.isPreview;
-                    return (
-                      <li key={l.id} className="flex items-center gap-3 px-5 py-3 text-sm">
-                        <Icon size={17} className={open ? "text-blue-600" : "text-slate-400"} />
+                    const done = progress?.completedLessonIds.includes(l.id);
+                    const row = "flex items-center gap-3 px-5 py-3 text-sm";
+                    const content = (
+                      <>
+                        {done ? (
+                          <CheckCircle2 size={17} className="text-emerald-600" />
+                        ) : (
+                          <Icon size={17} className={open ? "text-blue-600" : "text-slate-400"} />
+                        )}
                         <span className={open ? "text-slate-800" : "text-slate-500"}>{l.title}</span>
                         {l.isPreview && !canSeeLessons && (
                           <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
@@ -164,6 +178,17 @@ export default function CourseDetailPage() {
                           {l.estimatedDurationMinutes ? `${l.estimatedDurationMinutes} phút` : ""}
                           {!open && <Lock size={14} />}
                         </span>
+                      </>
+                    );
+                    return (
+                      <li key={l.id}>
+                        {open ? (
+                          <Link to={`/courses/${course.slug}/lessons/${l.id}`} className={`${row} hover:bg-blue-50/50`}>
+                            {content}
+                          </Link>
+                        ) : (
+                          <div className={row}>{content}</div>
+                        )}
                       </li>
                     );
                   })}
@@ -175,14 +200,22 @@ export default function CourseDetailPage() {
 
         {/* Enrollment box */}
         <aside className="lg:sticky lg:top-24 lg:self-start">
-          <EnrollmentBox course={course} onChanged={load} />
+          <EnrollmentBox course={course} progress={progress} onChanged={load} />
         </aside>
       </section>
     </main>
   );
 }
 
-function EnrollmentBox({ course, onChanged }: { course: CourseDetail; onChanged: () => Promise<void> }) {
+function EnrollmentBox({
+  course,
+  progress,
+  onChanged,
+}: {
+  course: CourseDetail;
+  progress: CourseProgress | null;
+  onChanged: () => Promise<void>;
+}) {
   const { user } = useAuth();
   const location = useLocation();
   const [password, setPassword] = useState("");
@@ -190,8 +223,10 @@ function EnrollmentBox({ course, onChanged }: { course: CourseDetail; onChanged:
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [confirmDrop, setConfirmDrop] = useState(false);
+  const [wantNotifications, setWantNotifications] = useState(true);
 
   const enrollment = course.viewer.enrollment;
+  const firstLessonId = course.modules.find((m) => m.lessons.length > 0)?.lessons[0].id;
   const now = Date.now();
   const notOpenYet = course.enrollmentOpensAt && new Date(course.enrollmentOpensAt).getTime() > now;
   const closed = course.enrollmentClosesAt && new Date(course.enrollmentClosesAt).getTime() < now;
@@ -217,7 +252,12 @@ function EnrollmentBox({ course, onChanged }: { course: CourseDetail; onChanged:
   const onEnroll = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     void run(
-      () => enroll(course.id, course.requiresPassword ? password : undefined),
+      () =>
+        enroll(
+          course.id,
+          course.requiresPassword ? password : undefined,
+          wantNotifications ? "Granted" : "Denied",
+        ),
       "Đăng ký thành công! Khóa học đã có trong “Khóa học của tôi”.",
     );
   };
@@ -261,13 +301,22 @@ function EnrollmentBox({ course, onChanged }: { course: CourseDetail; onChanged:
         </span>
         {enrollment.status === "Active" && (
           <>
-            <p className="mt-3 text-sm text-slate-600">Bạn đã đăng ký khóa học này.</p>
-            <Link
-              to="/my-courses"
-              className="mt-4 flex h-12 items-center justify-center rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700"
-            >
-              Đến khóa học của tôi
-            </Link>
+            {progress && (
+              <div className="mt-4">
+                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-blue-600" style={{ width: `${progress.progressPercentage}%` }} />
+                </div>
+                <p className="mt-1.5 text-xs text-slate-500">Hoàn thành {progress.progressPercentage}%</p>
+              </div>
+            )}
+            {firstLessonId && (
+              <Link
+                to={`/courses/${course.slug}/lessons/${progress?.resumeLessonId ?? firstLessonId}`}
+                className="mt-4 flex h-12 items-center justify-center rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700"
+              >
+                {progress && progress.completedLessonIds.length > 0 ? "Tiếp tục học" : "Bắt đầu học"}
+              </Link>
+            )}
             {confirmDrop ? (
               <div className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-800">
                 Hủy đăng ký khóa học này?
@@ -301,9 +350,22 @@ function EnrollmentBox({ course, onChanged }: { course: CourseDetail; onChanged:
           </>
         )}
         {enrollment.status === "Completed" && (
-          <p className="mt-3 text-sm text-slate-600">
-            Bạn đã hoàn thành khóa học. Bạn vẫn xem được nội dung và kết quả của mình.
-          </p>
+          <>
+            <p className="mt-3 text-sm text-slate-600">
+              Bạn đã hoàn thành khóa học. Bạn vẫn xem được nội dung và kết quả của mình.
+            </p>
+            {firstLessonId && (
+              <Link
+                to={`/courses/${course.slug}/lessons/${firstLessonId}`}
+                className="mt-4 flex h-12 items-center justify-center rounded-xl border border-slate-200 font-semibold text-slate-800 hover:bg-slate-50"
+              >
+                Xem lại bài học
+              </Link>
+            )}
+          </>
+        )}
+        {(enrollment.status === "Active" || enrollment.status === "Completed") && (
+          <CourseNotificationToggle courseId={course.id} />
         )}
         {enrollment.status === "Suspended" && (
           <p className="mt-3 text-sm text-slate-600">
@@ -357,6 +419,20 @@ function EnrollmentBox({ course, onChanged }: { course: CourseDetail; onChanged:
             />
           </div>
         )}
+        <label className="mb-3 flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={wantNotifications}
+            onChange={(e) => setWantNotifications(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            Nhận thông báo từ khóa học này
+            <span className="block text-xs text-slate-500">
+              Bài tập mới và nhắc hạn nộp. Điểm và tin nhắn riêng luôn được gửi.
+            </span>
+          </span>
+        </label>
         <button
           type="submit"
           disabled={busy || Boolean(notOpenYet) || Boolean(closed)}

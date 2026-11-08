@@ -33,10 +33,38 @@ cd infrastructure && docker compose up -d      # PostgreSQL on :5432
 cd ../backend
 cp .env.example .env                            # then set JWT_ACCESS_SECRET to 32+ random characters
 npm install
+npx prisma generate
 npx prisma migrate deploy                       # create the tables
 npm run seed                                    # create the Admin account (admin / Admin#2026)
 npm run seed:demo                               # optional: demo instructors, student and 8 courses
 npm run start:dev                               # http://localhost:8000/api/v1
+
+### Powershell
+
+# Move to infrastructure and start the PostgreSQL container
+cd infrastructure
+docker compose up -d
+
+# Move to the backend folder and copy the environment template
+cd ../backend
+Copy-Item .env.example .env
+
+# Open .env in Notepad to manually set JWT_ACCESS_SECRET (32+ random characters)
+notepad .env
+
+# Install dependencies and set up the database
+npm install
+npx prisma generate
+npx prisma migrate deploy
+npm run seed
+
+# Optional: Add demo instructors, student, and 8 courses
+npm run seed:demo
+
+# Start the application in development mode
+npm run start:dev
+
+
 ```
 
 - Swagger: http://localhost:8000/api/docs · health check: `GET /api/v1/health`
@@ -610,6 +638,15 @@ Full design, test cases and eval results: [docs/m3-plan.md](docs/m3-plan.md).
 | 58 | **Evals and seed:** `npm run eval:scoring` (VMLU questions in `data/`), `eval:progress` (200 replayed heartbeat sequences), `eval:analytics` (every dashboard number vs hand-written SQL). `npm run seed:m3` creates a course with video, ViSQuAD reading lessons and 3 VMLU quizzes (`m3.student` / `m3.instructor`, password `Student#2026`). All three evals passed on 06/11/2026. | Checks the numbers on real data, not only hand-written cases. |
 | 59 | Changes to M2 files: back-relations on `User`, `Course` and `Lesson`; `ProgressModule` and `AnalyticsModule` registered in `app.module.ts`; `tsconfig.json` also type-checks `test/` and `scripts/` (`nest build` still builds only `src/`). | Needed to wire M3's modules in. Needs M2 review before merge. |
 
+### Changes as of 08/11/2026
+
+| # | Change | Reason |
+|---|---|---|
+| 60 | **Who records progress (confirmed):** only a Student with an **Active** enrollment in a course that is currently published (Public or Restricted). Preview viewers, course staff, Completed enrollments and Archived courses can open lessons but their progress is not saved (`403 PROGRESS_NOT_ALLOWED`). The enrollment window only controls enrolling, not studying. | Team decision. Matches change 32 and M3's code; docs/m3-plan.md §4.2 corrected. |
+| 61 | **Lesson viewer:** `GET /lessons/{id}` returns the lesson with `textContent`, `videoUrl` and `downloadableResources`. 404 `LESSON_NOT_FOUND` when the course is hidden from the caller, 403 `LESSON_LOCKED` (and no URLs) when the course is visible but the caller may not open the lesson. Public route, so preview lessons open without logging in. | Week 4: students open lessons; the frontend lesson page records progress through M3's endpoints. |
+| 62 | **`DEV_SAMPLE_VIDEO_URL`:** until the media service signs real uploads, a Video lesson without a file plays this public sample (outside production only, `isSampleVideo: true`). Nothing is stored as a URL. | Progress can be tested end to end before uploads exist. |
+| 63 | **Deleting a lesson or module** deletes students' progress on it (ON DELETE CASCADE) and, in the same transaction, re-checks the course: Active students who have now finished every remaining lesson become **Completed** (`ProgressService.recheckCourseCompletion`, `EnrollmentsService.markCompletedMany`). A course left with no lessons completes nobody. Adding lessons never un-completes anyone. | Same approach as Coursera, Khan Academy and Moodle: progress is measured against the course as it is now, and a finished course stays finished. |
+
 ---
 
 ## 6. Jobs for later
@@ -670,6 +707,7 @@ Base path `/api/v1`. Full request/response shapes are in Swagger (`/api/docs`). 
 | `DELETE /modules/{id}` | course staff | Deletes its lessons too |
 | `POST /modules/{id}/lessons` | course staff | `{title, type: "Text" \| "Video" \| "Document", textContent?, estimatedDurationMinutes?, isPreview?}` |
 | `DELETE /lessons/{id}` | course staff | |
+| `GET /lessons/{id}` | enrolled (Active/Completed), course staff, or anyone for a preview lesson | Lesson viewer: `textContent`, `videoUrl` (signed; dev sample until uploads exist), `downloadableResources` |
 | `PUT /lessons/{id}/progress` | Student, Active enrollment | M3. Video heartbeat `{positionSeconds, durationSeconds}` → `{lessonId, lastPositionSeconds, percent, completedAt}` |
 | `POST /lessons/{id}/complete` | Student, Active enrollment | M3. Text and Document lessons only |
 | `GET /lessons/{id}/progress` | anyone who can open the lesson | M3. Zeros if never opened |

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../auth/auth-context";
 import { ROLE_LABEL } from "../lib/roles";
+import NotificationBell from "./notificationBell";
 
 const navItems = [
   { label: "Trang chủ", path: "/" },
@@ -93,6 +94,13 @@ export default function Navbar() {
             className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
           />
         </form>
+
+        {/* One bell for every screen size, so the unread count is polled once. */}
+        {user && (
+          <div className="ml-auto md:ml-0">
+            <NotificationBell />
+          </div>
+        )}
 
         {/* Authentication */}
         {user ? (

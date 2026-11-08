@@ -8,6 +8,7 @@ import { paginated, PaginationQueryDto, skipTake } from '../../common/pagination
 import { OutboxService } from '../../events/outbox.service';
 import { AccessPolicyService } from '../access/access-policy.service';
 import { CoursesService } from '../courses/courses.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CourseProgressService } from '../progress/course-progress.service';
 import { EnrolledCourseSummary, progressPercentage, toUserSummary } from '../users/user.mapper';
 import { UsersService } from '../users/users.service';
@@ -27,12 +28,18 @@ export class EnrollmentsService {
     private readonly users: UsersService,
     private readonly outbox: OutboxService,
     private readonly progress: CourseProgressService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ─── Student actions ──────────────────────────────────────────────────────
 
   // New enrollment, or re-activates a Dropped one (timesEnrolled + 1).
-  async enroll(user: AuthUser, courseId: number, coursePassword?: string): Promise<Enrollment> {
+  async enroll(
+    user: AuthUser,
+    courseId: number,
+    coursePassword?: string,
+    notifications?: 'Granted' | 'Denied',
+  ): Promise<Enrollment> {
     const course = await this.courses.findById(courseId);
     if (!course || !(await this.access.canSeeCourse(user, course))) throw courseNotFound();
 
@@ -87,6 +94,9 @@ export class EnrollmentsService {
           }
           throw e;
         }
+      }
+      if (notifications) {
+        await this.notifications.setSubscription(tx, user.id, courseId, notifications);
       }
       await this.outbox.add(tx, 'ENROLLMENT_CREATED', {
         enrollmentId: toPublicId('enrollment', enrollment.id),
@@ -233,9 +243,37 @@ export class EnrollmentsService {
   // Call when a student's progress reaches 100 %. Safe to call more than once.
   // Pass the caller's transaction to make it part of that transaction.
   async markCompleted(userId: string, courseId: number, db: Tx = this.prisma): Promise<void> {
-    await db.enrollment.updateMany({
-      where: { userId, courseId, status: 'Active' },
-      data: { status: 'Completed', completedAt: new Date() },
-    });
+    await this.markCompletedMany([userId], courseId, db);
+  }
+
+  // Same for several students at once, e.g. after a lesson is deleted.
+  // Returns how many Active enrollments became Completed. Each one that changes
+  // writes COURSE_COMPLETED (→ "course completed" notification) in the same
+  // transaction, and only once even if two requests complete it at the same time.
+  async markCompletedMany(userIds: string[], courseId: number, db: Tx = this.prisma): Promise<number> {
+    if (userIds.length === 0) return 0;
+    const run = async (tx: Tx) => {
+      const candidates = await tx.enrollment.findMany({
+        where: { userId: { in: userIds }, courseId, status: 'Active' },
+        select: { id: true, userId: true },
+      });
+      let completed = 0;
+      for (const e of candidates) {
+        const changed = await tx.enrollment.updateMany({
+          where: { id: e.id, status: 'Active' },
+          data: { status: 'Completed', completedAt: new Date() },
+        });
+        if (changed.count === 0) continue;
+        completed++;
+        await this.outbox.add(tx, 'COURSE_COMPLETED', {
+          enrollmentId: toPublicId('enrollment', e.id),
+          courseId: toPublicId('course', courseId),
+          userId: e.userId,
+        });
+      }
+      return completed;
+    };
+    // Already inside the caller's transaction, or start one.
+    return db === this.prisma ? this.prisma.$transaction(run) : run(db);
   }
 }

@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { CoursesModule } from '../courses/courses.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { CourseProgressModule } from '../progress/course-progress.module';
 import { UsersModule } from '../users/users.module';
 import { EnrollmentsController } from './enrollments.controller';
 import { EnrollmentsService } from './enrollments.service';
 
 @Module({
-  imports: [CoursesModule, UsersModule, CourseProgressModule],
+  imports: [CoursesModule, UsersModule, CourseProgressModule, NotificationsModule],
   controllers: [EnrollmentsController],
   providers: [EnrollmentsService],
   exports: [EnrollmentsService],

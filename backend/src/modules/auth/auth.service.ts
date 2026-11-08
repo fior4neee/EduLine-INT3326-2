@@ -6,6 +6,7 @@ import type { EnvironmentVariables } from '../../common/config/env.validation';
 import { PrismaService } from '../../common/database/prisma.service';
 import { AppException } from '../../common/errors/app.exception';
 import { MailService } from '../../common/mail/mail.service';
+import { OutboxService } from '../../events/outbox.service';
 import {
   burnHashTime,
   hashSecret,
@@ -41,6 +42,7 @@ export class AuthService {
     private readonly tokens: TokenService,
     private readonly mail: MailService,
     private readonly config: ConfigService<EnvironmentVariables, true>,
+    private readonly outbox: OutboxService,
   ) {}
 
   // Always creates a Student. Choosing "Instructor" files a request for an Admin.
@@ -53,19 +55,31 @@ export class AuthService {
     if (byEmail) throw emailTaken();
 
     const wantsInstructor = dto.accountType === 'Instructor';
+    const passwordHash = await hashSecret(dto.password);
     let user: User;
     try {
-      user = await this.users.create({
-        username: dto.username,
-        email: dto.email,
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        passwordHash: await hashSecret(dto.password),
-        accountType: 'Student',
-        ...(wantsInstructor && {
-          instructorRequestStatus: 'Pending',
-          instructorRequestedAt: new Date(),
-        }),
+      // The account and its USER_REGISTERED event (→ welcome notification) commit together.
+      user = await this.prisma.$transaction(async (tx) => {
+        const created = await this.users.create(
+          {
+            username: dto.username,
+            email: dto.email,
+            firstName: dto.firstName,
+            lastName: dto.lastName,
+            passwordHash,
+            accountType: 'Student',
+            ...(wantsInstructor && {
+              instructorRequestStatus: 'Pending',
+              instructorRequestedAt: new Date(),
+            }),
+          },
+          tx,
+        );
+        await this.outbox.add(tx, 'USER_REGISTERED', {
+          userId: created.id,
+          requestedInstructor: wantsInstructor,
+        });
+        return created;
       });
     } catch (e) {
       // Lost a race with another registration using the same username or email.

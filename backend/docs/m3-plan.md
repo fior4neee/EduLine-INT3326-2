@@ -120,7 +120,7 @@ Mỗi model `User`, `Lesson`, `Course` cần thêm một dòng back-relation. Vi
 - `percent = max(percent cũ, floor(position / duration × 100))`, giới hạn trong khoảng 0–100. Khi người học tua lùi, `lastPositionSeconds` vẫn được cập nhật nhưng `percent` không giảm.
 - `completedAt` chỉ được đặt một lần.
 - **Tiến độ khóa học** = `floor(số bài đã hoàn thành × 100 / tổng số bài)`, nên chỉ ra 100 khi mọi bài đã xong. Khi đạt 100, M3 gọi `EnrollmentsService.markCompleted`.
-- Chỉ ghi tiến độ khi `AccessPolicy` cho phép học viên học (enrollment `Active`, hoặc bài preview). Enrollment `Completed` thì chỉ đọc, không ghi.
+- Chỉ ghi tiến độ khi học viên có enrollment `Active` trong khóa đang xuất bản (Public hoặc Restricted). Người xem bài preview mà chưa ghi danh, giảng viên, enrollment `Completed` và khóa `Archived` chỉ được xem, không ghi tiến độ (backend README thay đổi 60, M2 xác nhận 08/11/2026).
 
 ### 4.3 Endpoint
 
@@ -491,5 +491,6 @@ Kết quả nộp báo cáo: bảng p50/p95/p99 và tỷ lệ lỗi cho heartbea
 | 2 | Thêm back-relation vào `User`, `Lesson`, `Course` là sửa model của M2 | Gửi PR nhỏ chỉ có migration để M2 review trước | M2 |
 | 3 | Prototype cũ dùng `scoreAttempt(tx, attemptId)`, còn [quiz-submission-design.md](quiz-submission-design.md) quy định hàm thuần `score(questions, answers)` | Theo tài liệu thiết kế (hàm thuần) | M1, M2 |
 | 4 | Giảng viên thêm bài mới sau khi học viên đã `Completed` | Enrollment giữ `Completed`, % hiển thị có thể dưới 100 | M1 |
+| 7 | Giảng viên xóa bài hoặc chương | **Đã xử lý (M2, 08/11/2026):** tiến độ của bài bị xóa mất theo (cascade). Trong cùng transaction, `ProgressService.recheckCourseCompletion` chuyển sang `Completed` các học viên `Active` đã xong mọi bài còn lại. Test D01–D06 trong `test/content.int-spec.ts` | — |
 | 5 | Heartbeat 15 giây với 500 người dùng là khoảng 33 lần ghi/giây | Một câu `upsert` cho mỗi heartbeat, không transaction. Nếu nghẽn thì giãn chu kỳ lên 30 giây | M5 |
 | 6 | `test.jsonl` của VMLU không có đáp án | Không dùng để chấm điểm hay eval | M3 |

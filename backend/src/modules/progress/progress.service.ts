@@ -191,6 +191,25 @@ export class ProgressService {
     return true;
   }
 
+  // After lessons are deleted, students who had finished every remaining lesson
+  // are now at 100 %: complete their enrollments too. Their progress rows for the
+  // deleted lessons are already gone (ON DELETE CASCADE). A course left with no
+  // lessons completes nobody. Called by the content module (M2) in its delete
+  // transaction. Returns how many enrollments became Completed.
+  async recheckCourseCompletion(courseId: number, db: Tx = this.prisma): Promise<number> {
+    const total = await db.lesson.count({ where: { courseId } });
+    if (total === 0) return 0;
+    const perStudent = await db.lessonProgress.groupBy({
+      by: ['userId'],
+      where: { courseId, completedAt: { not: null } },
+      _count: { _all: true },
+    });
+    const finished = perStudent
+      .filter((s) => courseProgressPercent(s._count._all, total) === 100)
+      .map((s) => s.userId);
+    return this.enrollments.markCompletedMany(finished, courseId, db);
+  }
+
   // ─── Internals ────────────────────────────────────────────────────────────
 
   // At 100 % the enrollment becomes Completed (EnrollmentsService, M2).

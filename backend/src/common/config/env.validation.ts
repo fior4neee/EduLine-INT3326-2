@@ -61,6 +61,35 @@ export class EnvironmentVariables {
   @Min(0)
   @Max(5)
   TRUST_PROXY_HOPS: number = 1;
+
+  // Played by Video lessons that have no uploaded file yet, outside production
+  // only. Empty disables it. Default: a public-domain clip from MDN.
+  @IsString()
+  DEV_SAMPLE_VIDEO_URL: string =
+    'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm';
+
+  // How often the API handles outbox events (notifications). 0 turns the loop
+  // off; integration tests do this and call the processor directly.
+  @IsInt()
+  @Min(0)
+  @Max(60_000)
+  OUTBOX_POLL_INTERVAL_MS: number = 2000;
+
+  // After this many failures an event is skipped (see outbox_events.last_error).
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  OUTBOX_MAX_ATTEMPTS: number = 5;
+
+  // How often the API queues "assignment due within 24 h" reminders. 0 = off.
+  @IsInt()
+  @Min(0)
+  @Max(86_400_000)
+  ASSIGNMENT_REMINDER_INTERVAL_MS: number = 900_000;
+
+  // Shared secret for /internal/* (Cloud Scheduler). Empty disables those routes.
+  @IsString()
+  INTERNAL_API_TOKEN: string = '';
 }
 
 export type AppConfigService = ConfigService<EnvironmentVariables, true>;

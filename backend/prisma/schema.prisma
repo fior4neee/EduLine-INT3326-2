@@ -83,6 +83,14 @@ enum AttemptStatus {
   @@map("attempt_status")
 }
 
+// What a student may hand in for an assignment (chosen by the instructor).
+enum SubmissionType {
+  TextEntry
+  FileUpload
+
+  @@map("submission_type")
+}
+
 enum SubmissionStatus {
   Submitted
   Graded
@@ -94,8 +102,24 @@ enum NotificationType {
   AssignmentGraded
   CourseAnnouncement
   System
+  AssignmentPublished
+  AssignmentDueSoon
+  SubmissionComment
+  CourseCompleted
+  CourseWelcome
 
   @@map("notification_type")
+}
+
+// A user's answer to "receive notifications from this course?". Default means
+// never answered and behaves like Granted. Personal notifications (grades,
+// comments on your submission, course completed, welcome) ignore it.
+enum NotificationPermission {
+  Default
+  Granted
+  Denied
+
+  @@map("notification_permission")
 }
 
 // ─── Users ──────────────────────────────────────────────────────────────────
@@ -118,15 +142,17 @@ model User {
   updatedAt               DateTime                 @updatedAt @map("updated_at")
 
   // "enrolled_courses" in the API is built from this relation.
-  enrollments         Enrollment[]
-  instructedCourses   CourseInstructor[]
-  quizAttempts        QuizAttempt[]
-  submissions         Submission[]         @relation("SubmissionAuthor")
-  gradedSubmissions   Submission[]         @relation("SubmissionGrader")
-  refreshTokens       RefreshToken[]
-  passwordResetTokens PasswordResetToken[]
-  notifications       Notification[]
-  lessonProgress      LessonProgress[]
+  enrollments               Enrollment[]
+  instructedCourses         CourseInstructor[]
+  quizAttempts              QuizAttempt[]
+  submissions               Submission[]               @relation("SubmissionAuthor")
+  gradedSubmissions         Submission[]               @relation("SubmissionGrader")
+  submissionComments        SubmissionComment[]
+  refreshTokens             RefreshToken[]
+  passwordResetTokens       PasswordResetToken[]
+  notifications             Notification[]
+  notificationSubscriptions NotificationSubscription[]
+  lessonProgress            LessonProgress[]
 
   @@index([instructorRequestStatus])
   @@map("users")
@@ -188,6 +214,8 @@ model Course {
   category           String?
   // Public cover image (catalog thumbnails are not access-controlled).
   thumbnailUrl       String?          @map("thumbnail_url")
+  // Sent to each student as a notification when they enroll. null = none.
+  welcomeMessage     String?          @map("welcome_message")
   createdAt          DateTime         @default(now()) @map("created_at")
   updatedAt          DateTime         @updatedAt @map("updated_at")
 
@@ -198,12 +226,13 @@ model Course {
   prerequisites CoursePrerequisite[] @relation("CourseRequires")
   requiredBy    CoursePrerequisite[] @relation("CourseRequiredBy")
 
-  enrollments    Enrollment[]
-  modules        Module[]
-  lessons        Lesson[]
-  quizzes        Quiz[]
-  assignments    Assignment[]
-  lessonProgress LessonProgress[]
+  enrollments               Enrollment[]
+  modules                   Module[]
+  lessons                   Lesson[]
+  quizzes                   Quiz[]
+  assignments               Assignment[]
+  lessonProgress            LessonProgress[]
+  notificationSubscriptions NotificationSubscription[]
 
   @@index([visibility])
   @@map("courses")
@@ -411,14 +440,25 @@ model LessonProgress {
 // ─── Assignments ────────────────────────────────────────────────────────────
 
 model Assignment {
-  id                Int       @id @default(autoincrement())
-  lessonId          Int       @map("lesson_id")
-  courseId          Int       @map("course_id")
-  title             String
-  instructions      String
-  maxPoints         Int       @default(100) @map("max_points")
-  allowedExtensions String[]  @default([]) @map("allowed_extensions")
-  dueAt             DateTime? @map("due_at")
+  id                   Int              @id @default(autoincrement())
+  lessonId             Int              @map("lesson_id")
+  courseId             Int              @map("course_id")
+  title                String
+  instructions         String
+  maxPoints            Int              @default(100) @map("max_points")
+  // What students may hand in. At least one.
+  submissionTypes      SubmissionType[] @default([TextEntry, FileUpload]) @map("submission_types")
+  // File types accepted for FileUpload, e.g. [".pdf", ".docx"]. Empty = any.
+  allowedExtensions    String[]         @default([]) @map("allowed_extensions")
+  // "Available from". Before it, students see the title only. null = now.
+  unlockAt             DateTime?        @map("unlock_at")
+  dueAt                DateTime?        @map("due_at")
+  // false = nothing can be submitted after dueAt. true = accepted, flagged late.
+  allowLateSubmissions Boolean          @default(true) @map("allow_late_submissions")
+  // The instructor's files (Cloud Storage keys), sent as short-lived links.
+  attachmentKeys       String[]         @default([]) @map("attachment_keys")
+  // null = draft, invisible to students. Publishing notifies the class.
+  publishedAt          DateTime?        @map("published_at")
 
   lesson      Lesson       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
@@ -429,17 +469,21 @@ model Assignment {
   @@map("assignments")
 }
 
-// One submission per student per assignment. The file lives in the private
-// Cloud Storage "submissions" bucket; only its key is stored here.
-// Resubmitting replaces the file, allowed only before dueAt and before grading.
+// One submission per student per assignment: either a text entry or a file
+// (exactly one, enforced by a CHECK constraint in the migration). A file lives
+// in the private "submissions" bucket; only its key is stored here.
+// Resubmitting replaces it until it is graded (and, when late work is off, until dueAt).
 model Submission {
   id           Int              @id @default(autoincrement())
   assignmentId Int              @map("assignment_id")
   userId       String           @map("user_id") @db.Uuid
-  fileKey      String           @map("file_key")
-  fileName     String           @map("file_name")
-  sizeBytes    Int              @map("size_bytes")
-  mimeType     String           @map("mime_type")
+  // Text entry submission.
+  textBody     String?          @map("text_body")
+  // File submission.
+  fileKey      String?          @map("file_key")
+  fileName     String?          @map("file_name")
+  sizeBytes    Int?             @map("size_bytes")
+  mimeType     String?          @map("mime_type")
   status       SubmissionStatus @default(Submitted)
   // True when submittedAt is after the assignment's dueAt.
   isLate       Boolean          @default(false) @map("is_late")
@@ -449,13 +493,30 @@ model Submission {
   submittedAt  DateTime         @default(now()) @map("submitted_at")
   gradedAt     DateTime?        @map("graded_at")
 
-  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  user       User       @relation("SubmissionAuthor", fields: [userId], references: [id], onDelete: Cascade)
-  gradedBy   User?      @relation("SubmissionGrader", fields: [gradedById], references: [id], onDelete: SetNull)
+  assignment Assignment          @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  user       User                @relation("SubmissionAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  gradedBy   User?               @relation("SubmissionGrader", fields: [gradedById], references: [id], onDelete: SetNull)
+  comments   SubmissionComment[]
 
   @@unique([assignmentId, userId])
   @@index([userId])
   @@map("submissions")
+}
+
+// Private thread on one submission between the student and the course staff
+// (the "Comments" panel in Canvas).
+model SubmissionComment {
+  id           Int      @id @default(autoincrement())
+  submissionId Int      @map("submission_id")
+  authorId     String   @map("author_id") @db.Uuid
+  body         String
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  author     User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId, createdAt])
+  @@map("submission_comments")
 }
 
 // ─── Notifications ──────────────────────────────────────────────────────────
@@ -466,18 +527,41 @@ model Notification {
   type          NotificationType
   title         String
   messageBody   String           @map("message_body")
+  // Optional picture shown with the notification, e.g. the course cover.
+  // Always a public URL or frontend path, never a signed URL (those expire).
+  imageUrl      String?          @map("image_url")
   // In-app route, e.g. /courses/1234/lessons/9905
   actionUrl     String?          @map("action_url")
+  // Lets the frontend merge related notifications, e.g. "asg_3301:comments".
+  groupKey      String?          @map("group_key")
   isRead        Boolean          @default(false) @map("is_read")
-  // eventId of the Pub/Sub event that created it. Unique, so a redelivered
-  // event never creates a second notification.
-  sourceEventId String?          @unique @map("source_event_id") @db.Uuid
+  // eventId of the outbox event that created it. Unique per recipient, so a
+  // reprocessed event never creates a second notification, while one event can
+  // still notify a whole class.
+  sourceEventId String?          @map("source_event_id") @db.Uuid
   createdAt     DateTime         @default(now()) @map("created_at")
 
   recipient User @relation(fields: [recipientId], references: [id], onDelete: Cascade)
 
+  @@unique([sourceEventId, recipientId])
   @@index([recipientId, isRead, createdAt(sort: Desc)])
   @@map("notifications")
+}
+
+// One row per user per course once they answer the enroll-dialog question.
+model NotificationSubscription {
+  userId    String                 @map("user_id") @db.Uuid
+  courseId  Int                    @map("course_id")
+  status    NotificationPermission @default(Default)
+  createdAt DateTime               @default(now()) @map("created_at")
+  updatedAt DateTime               @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([userId, courseId])
+  @@index([courseId, status])
+  @@map("notification_subscriptions")
 }
 
 // ─── Events (transactional outbox) ──────────────────────────────────────────
@@ -490,7 +574,13 @@ model OutboxEvent {
   type        String
   payload     Json
   createdAt   DateTime  @default(now()) @map("created_at")
+  // Set once the event has been handled (notifications created, and later
+  // published to Pub/Sub). null = still waiting.
   publishedAt DateTime? @map("published_at")
+  // Failed handling attempts. Events that fail OUTBOX_MAX_ATTEMPTS times are
+  // skipped so one bad event cannot block the queue; lastError says why.
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error")
 
   @@index([publishedAt, createdAt])
   @@map("outbox_events")

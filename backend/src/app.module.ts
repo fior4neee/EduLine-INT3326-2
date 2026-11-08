@@ -13,13 +13,16 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { UserThrottlerGuard } from './common/guards/user-throttler.guard';
 import { MailModule } from './common/mail/mail.module';
 import { EventsModule } from './events/events.module';
+import { OutboxProcessorModule } from './events/outbox-processor.module';
 import { AccessPolicyModule } from './modules/access/access-policy.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { AssignmentsModule } from './modules/assignments/assignments.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ContentModule } from './modules/content/content.module';
 import { CoursesModule } from './modules/courses/courses.module';
 import { EnrollmentsModule } from './modules/enrollments/enrollments.module';
 import { HealthModule } from './modules/health/health.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ProgressModule } from './modules/progress/progress.module';
 import { UsersModule } from './modules/users/users.module';
 
@@ -60,6 +63,9 @@ import { UsersModule } from './modules/users/users.module';
     EnrollmentsModule,
     ContentModule,
     ProgressModule,
+    NotificationsModule,
+    OutboxProcessorModule,
+    AssignmentsModule,
     AnalyticsModule,
   ],
   providers: [
