@@ -99,10 +99,31 @@ gcloud run deploy api --source backend --region asia-southeast1 `
 
 Migration mới: bật `cloud-sql-proxy <connection name> --port 5433 --gcloud-auth`, đặt `DATABASE_URL` trỏ `127.0.0.1:5433` rồi `npm run prisma:deploy` trong `backend/`.
 
+### Pub/Sub (tuần 7)
+
+| Resource | Cấu hình | Ghi chú |
+|---|---|---|
+| Topic `notifications` | | `sa-api` có `roles/pubsub.publisher` **chỉ trên topic này** |
+| Subscription `notifications-worker` | **Pull** (tạm thời), ack deadline 60 s, retry 10 s → 600 s, dead-letter sau **5** lần | Khi có worker: `gcloud pubsub subscriptions modify-push-config notifications-worker --push-endpoint=<worker url>/... --push-auth-service-account=sa-pubsub-push@...` |
+| Topic `notifications-dlq` | Dead-letter topic | Pub/Sub service agent có `pubsub.publisher` trên DLQ và `pubsub.subscriber` trên `notifications-worker` (bắt buộc để chuyển message lỗi) |
+| Subscription `notifications-dlq-sub` | Pull, giữ 7 ngày | Topic không có subscription thì message bị **bỏ**, nên DLQ phải có subscription để giữ message lỗi lại mà điều tra |
+
+Kiểm tra:
+
+```powershell
+gcloud pubsub topics publish notifications --message='{\"type\":\"TEST\",\"eventId\":\"t-1\"}'
+gcloud pubsub subscriptions pull notifications-worker --auto-ack --limit=1
+gcloud pubsub subscriptions pull notifications-dlq-sub --limit=5     # message lỗi (không ack)
+```
+
+PowerShell 5.1 bỏ dấu `"` khi truyền chuỗi cho chương trình ngoài, nên trong JSON phải viết `\"`.
+
 ### Việc tiếp theo
 
 - [x] Chạy migration lên Cloud SQL qua Auth Proxy (5 migration) và seed Admin (mật khẩu mạnh, không dùng giá trị trong `.env.example`)
 - [x] Deploy Cloud Run `api` (`--source backend`, Artifact Registry `cloud-run-source-deploy`) với `sa-api`, secret và Cloud SQL connector
 - [x] Smoke test: `/api/v1/health` → `200 {"status":"ok","database":"up"}`
 - [x] RBAC trên cloud: `GET /admin/users` không token → `401`, Student → `403`, Admin → `200`
-- [ ] Pub/Sub topic + dead-letter topic cho worker (tuần 7)
+- [x] Pub/Sub topic + dead-letter topic (tuần 7), xem mục Pub/Sub
+- [ ] Deploy worker (M5/M6), chuyển `notifications-worker` sang push (OIDC, `sa-pubsub-push`)
+- [ ] API publish outbox event lên topic `notifications` thay vì tự xử lý trong process
