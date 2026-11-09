@@ -92,7 +92,7 @@ npm install
 ### Start Development Server
 
 ```bash
-npm run dev
+npm run dev:cloud
 ```
 
 Open the local URL displayed by Vite, typically:

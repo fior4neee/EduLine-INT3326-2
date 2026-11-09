@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Fragment, useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { Archive, ClipboardList, Eye, Globe, KeyRound, Lock, MessageSquareHeart, Plus, Trash2 } from "lucide-react";
+import { Archive, ClipboardList, Eye, Globe, KeyRound, Lock, MessageSquareHeart, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   ENROLLMENT_BADGE,
   ENROLLMENT_LABEL,
@@ -27,10 +27,13 @@ import {
 } from "../services/courses";
 import {
   createAssignment,
+  deleteAssignment,
   formatDateTime,
   fromLocalInput,
   listCourseAssignments,
   publishAssignment,
+  toLocalInput,
+  updateAssignment,
   type Assignment,
   type AssignmentInput,
   type SubmissionType,
@@ -52,6 +55,7 @@ export default function InstructorCourseManagePage() {
   const [assignments, setAssignments] = useState<Map<string, Assignment>>(new Map());
   const [welcome, setWelcome] = useState<string | null>(null);
   const [addingAssignmentTo, setAddingAssignmentTo] = useState<string | null>(null);
+  const [editingAssignment, setEditingAssignment] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -216,7 +220,8 @@ export default function InstructorCourseManagePage() {
                 {m.lessons.map((l) => {
                   const a = assignments.get(l.id);
                   return (
-                  <li key={l.id} className="flex flex-wrap items-center gap-3 px-5 py-2.5 text-sm">
+                  <Fragment key={l.id}>
+                  <li className="flex flex-wrap items-center gap-3 px-5 py-2.5 text-sm">
                     <span className="w-16 text-xs font-semibold text-slate-400">{l.type === "Assignment" ? "Bài tập" : l.type}</span>
                     <Link to={`/courses/${course.slug}/lessons/${l.id}`} className="text-slate-800 hover:text-blue-600 hover:underline">{l.title}</Link>
                     {a && (
@@ -236,6 +241,25 @@ export default function InstructorCourseManagePage() {
                           className="rounded-lg bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 hover:bg-violet-100">
                           Chấm bài
                         </Link>
+                        <button type="button" disabled={busy}
+                          onClick={() => {
+                            setAddingAssignmentTo(null);
+                            setEditingAssignment(editingAssignment === a.id ? null : a.id);
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200">
+                          <Pencil size={12} /> Sửa
+                        </button>
+                        <button type="button" disabled={busy}
+                          onClick={() => {
+                            if (!window.confirm(`Xóa bài tập “${a.title}”? Toàn bộ bài nộp, điểm và nhận xét của học viên cũng sẽ bị xóa.`)) return;
+                            void run(async () => {
+                              await deleteAssignment(a.id);
+                              setEditingAssignment(null);
+                            }, "Đã xóa bài tập.");
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">
+                          <Trash2 size={12} /> Xóa
+                        </button>
                       </>
                     )}
                     {l.isPreview && (
@@ -244,21 +268,40 @@ export default function InstructorCourseManagePage() {
                     <span className="ml-auto text-xs text-slate-400">
                       {l.estimatedDurationMinutes ? `${l.estimatedDurationMinutes} phút` : ""}
                     </span>
-                    <button type="button" disabled={busy} aria-label={`Xóa ${l.title}`}
-                      onClick={() => run(() => deleteLesson(l.id), "Đã xóa bài học.")}
-                      className="rounded-lg p-1 text-slate-400 hover:bg-red-50 hover:text-red-600">
-                      <Trash2 size={14} />
-                    </button>
+                    {/* Assignment rows use the "Xóa" button above, which also warns about submissions. */}
+                    {!a && (
+                      <button type="button" disabled={busy} aria-label={`Xóa ${l.title}`}
+                        onClick={() => run(() => deleteLesson(l.id), "Đã xóa bài học.")}
+                        className="rounded-lg p-1 text-slate-400 hover:bg-red-50 hover:text-red-600">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </li>
+                  {a && editingAssignment === a.id && (
+                    <li>
+                      <AssignmentForm
+                        initial={a}
+                        busy={busy}
+                        onCancel={() => setEditingAssignment(null)}
+                        onSave={(input) =>
+                          run(async () => {
+                            await updateAssignment(a.id, input);
+                            setEditingAssignment(null);
+                          }, "Đã lưu thay đổi bài tập.")
+                        }
+                      />
+                    </li>
+                  )}
+                  </Fragment>
                   );
                 })}
               </ul>
               <AddLessonForm busy={busy} onAdd={(input) => run(() => createLesson(m.id, input), "Đã thêm bài học.")} />
               {addingAssignmentTo === m.id ? (
-                <AddAssignmentForm
+                <AssignmentForm
                   busy={busy}
                   onCancel={() => setAddingAssignmentTo(null)}
-                  onAdd={(input) =>
+                  onSave={(input) =>
                     run(async () => {
                       await createAssignment(m.id, input);
                       setAddingAssignmentTo(null);
@@ -266,7 +309,11 @@ export default function InstructorCourseManagePage() {
                   }
                 />
               ) : (
-                <button type="button" onClick={() => setAddingAssignmentTo(m.id)}
+                <button type="button"
+                  onClick={() => {
+                    setEditingAssignment(null);
+                    setAddingAssignmentTo(m.id);
+                  }}
                   className="flex w-full items-center gap-1.5 border-t border-slate-100 px-5 py-3 text-xs font-semibold text-violet-700 hover:bg-violet-50">
                   <ClipboardList size={14} /> Thêm bài tập
                 </button>
@@ -385,25 +432,28 @@ function AddLessonForm({ busy, onAdd }: { busy: boolean; onAdd: (input: LessonIn
   );
 }
 
-// New assignment: title, instructions, due date, points, accepted submission
-// types and file extensions, "available from", and whether late work is accepted.
-function AddAssignmentForm({
+// Create or edit an assignment: title, instructions, due date, points, accepted
+// submission types and file extensions, "available from", and whether late work
+// is accepted. With `initial`, the fields start from that assignment (edit mode).
+function AssignmentForm({
+  initial,
   busy,
-  onAdd,
+  onSave,
   onCancel,
 }: {
+  initial?: Assignment;
   busy: boolean;
-  onAdd: (input: AssignmentInput) => Promise<void>;
+  onSave: (input: AssignmentInput) => Promise<void>;
   onCancel: () => void;
 }) {
-  const [title, setTitle] = useState("");
-  const [instructions, setInstructions] = useState("");
-  const [dueAt, setDueAt] = useState("");
-  const [unlockAt, setUnlockAt] = useState("");
-  const [maxPoints, setMaxPoints] = useState("100");
-  const [types, setTypes] = useState<SubmissionType[]>(["TextEntry", "FileUpload"]);
-  const [extensions, setExtensions] = useState("");
-  const [allowLate, setAllowLate] = useState(true);
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [instructions, setInstructions] = useState(initial?.instructions ?? "");
+  const [dueAt, setDueAt] = useState(toLocalInput(initial?.dueAt ?? null));
+  const [unlockAt, setUnlockAt] = useState(toLocalInput(initial?.unlockAt ?? null));
+  const [maxPoints, setMaxPoints] = useState(String(initial?.maxPoints ?? 100));
+  const [types, setTypes] = useState<SubmissionType[]>(initial?.submissionTypes ?? ["TextEntry", "FileUpload"]);
+  const [extensions, setExtensions] = useState(initial?.allowedExtensions.join(", ") ?? "");
+  const [allowLate, setAllowLate] = useState(initial?.allowLateSubmissions ?? true);
 
   const toggleType = (t: SubmissionType) =>
     setTypes((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
@@ -414,7 +464,7 @@ function AddAssignmentForm({
       className="space-y-3 border-t border-slate-100 bg-violet-50/40 px-5 py-4"
       onSubmit={async (e) => {
         e.preventDefault();
-        await onAdd({
+        await onSave({
           title: title.trim(),
           instructions,
           maxPoints: Number(maxPoints),
@@ -426,7 +476,7 @@ function AddAssignmentForm({
         });
       }}
     >
-      <p className="text-sm font-bold text-violet-900">Bài tập mới</p>
+      <p className="text-sm font-bold text-violet-900">{initial ? "Sửa bài tập" : "Bài tập mới"}</p>
       <input required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)}
         placeholder="Tên bài tập" aria-label="Tên bài tập" className={`${field} w-full`} />
       <textarea required maxLength={20000} rows={4} value={instructions} onChange={(e) => setInstructions(e.target.value)}
@@ -466,7 +516,7 @@ function AddAssignmentForm({
       <div className="flex gap-2">
         <button type="submit" disabled={busy || types.length === 0}
           className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60">
-          Tạo bài tập
+          {initial ? "Lưu thay đổi" : "Tạo bài tập"}
         </button>
         <button type="button" onClick={onCancel} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">
           Hủy

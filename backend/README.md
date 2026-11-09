@@ -28,10 +28,15 @@ This folder holds the EduLine API (NestJS + Prisma) and the data model for the M
 
 ### Run it locally
 
+Start Docker Desktop first and wait for "Engine running".
+
 ```bash
-cd infrastructure && docker compose up -d      # PostgreSQL on :5432
+cd infrastructure
+cp -n .env.example .env                         # Postgres user/password for docker compose
+docker compose up -d                            # PostgreSQL on :5432
+docker compose ps                               # wait until eduline-postgres is "healthy"
 cd ../backend
-cp .env.example .env                            # then set JWT_ACCESS_SECRET to 32+ random characters
+cp -n .env.example .env                         # then set JWT_ACCESS_SECRET to 32+ random characters
 npm install
 npx prisma generate
 npx prisma migrate deploy                       # create the tables
@@ -39,19 +44,30 @@ npm run seed                                    # create the Admin account (admi
 npm run seed:demo                               # optional: demo instructors, student and 8 courses
 npm run seed:catalog                            # optional: 5 VMLU-topic courses from data/courses/*.json
 npm run start:dev                               # http://localhost:8000/api/v1
+```
 
-### Powershell
+### PowerShell (Windows)
 
-# Move to infrastructure and start the PostgreSQL container
+Start Docker Desktop first and wait for "Engine running". Run these from the repository root.
+
+```powershell
+# Create the Postgres settings file (only if missing) and start the PostgreSQL container
 cd infrastructure
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 docker compose up -d
 
-# Move to the backend folder and copy the environment template
-cd ../backend
-Copy-Item .env.example .env
+# Wait until eduline-postgres shows "healthy"
+docker compose ps
 
-# Open .env in Notepad to manually set JWT_ACCESS_SECRET (32+ random characters)
-notepad .env
+# Move to the backend folder and copy the environment template (only if missing)
+cd ..\backend
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+
+# Replace the placeholder JWT_ACCESS_SECRET with 64 random characters
+$b = New-Object byte[] 48
+[Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
+$secret = [Convert]::ToBase64String($b)
+(Get-Content .env) -replace '^JWT_ACCESS_SECRET=replace-with-at-least-32-random-characters$', "JWT_ACCESS_SECRET=$secret" | Set-Content .env -Encoding ascii
 
 # Install dependencies and set up the database
 npm install
@@ -65,10 +81,8 @@ npm run seed:demo
 # Optional: Add 5 courses (C, networking, statistics, macroeconomics, Vietnamese culture) with VMLU quizzes
 npm run seed:catalog
 
-# Start the application in development mode
+# Start the application in development mode (http://localhost:8000/api/v1)
 npm run start:dev
-
-
 ```
 
 - Swagger: http://localhost:8000/api/docs · health check: `GET /api/v1/health`
