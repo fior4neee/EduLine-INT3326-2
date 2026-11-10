@@ -5,6 +5,11 @@ import type { EnvironmentVariables } from '../../common/config/env.validation';
 import { PrismaService } from '../../common/database/prisma.service';
 import { AppException } from '../../common/errors/app.exception';
 import { toPublicId } from '../../common/ids/public-id';
+import {
+  RESOURCE_URL_TTL_SECONDS,
+  StorageService,
+  VIDEO_URL_TTL_SECONDS,
+} from '../../common/storage/storage.service';
 import { AccessPolicyService } from '../access/access-policy.service';
 import { CoursesService } from '../courses/courses.service';
 import { slugify } from '../courses/slug';
@@ -14,8 +19,8 @@ import { CreateLessonDto, CreateModuleDto } from './dto/content.dto';
 const lessonNotFound = () =>
   new AppException(HttpStatus.NOT_FOUND, 'LESSON_NOT_FOUND', 'Lesson not found.');
 
-// Owns modules and lessons. Week 3 version: create, delete and view. Editing,
-// reordering and file uploads (signed URLs from the media service) come in week 4.
+// Owns modules and lessons: create, delete and view. Lesson files are uploaded
+// through LessonMediaService. Editing and reordering are not built yet.
 @Injectable()
 export class ContentService {
   constructor(
@@ -23,6 +28,7 @@ export class ContentService {
     private readonly courses: CoursesService,
     private readonly access: AccessPolicyService,
     private readonly progress: ProgressService,
+    private readonly storage: StorageService,
     private readonly config: ConfigService<EnvironmentVariables, true>,
   ) {}
 
@@ -46,7 +52,10 @@ export class ContentService {
       );
     }
 
-    const video = this.videoUrl(lesson.type, lesson.videoKey);
+    const [video, downloadableResources] = await Promise.all([
+      this.videoUrl(lesson.type, lesson.videoKey),
+      this.resourceUrls(lesson.resourceKeys),
+    ]);
     return {
       id: toPublicId('lesson', lesson.id),
       moduleId: toPublicId('module', lesson.moduleId),
@@ -66,23 +75,37 @@ export class ContentService {
       videoUrl: video.url,
       // true while no real video is uploaded and a development sample is shown.
       isSampleVideo: video.isSample,
-      // Signed download URLs for resourceKeys arrive with the media service (week 4).
-      downloadableResources: [] as string[],
+      // Signed links to the lesson's PDFs, in upload order (10 minutes).
+      downloadableResources,
       // For Assignment / Quiz lessons: open GET /assignments/{id} or /quizzes/{id}.
       assignmentId: lesson.assignments[0] ? toPublicId('assignment', lesson.assignments[0].id) : null,
       quizId: lesson.quizzes[0] ? toPublicId('quiz', lesson.quizzes[0].id) : null,
     };
   }
 
-  // Real videos need the media service to sign videoKey (week 4, M6). Until then a
-  // Video lesson without an uploaded file plays DEV_SAMPLE_VIDEO_URL outside
+  // An uploaded video plays from a signed link (2 hours, so seeking keeps working).
+  // A Video lesson without an uploaded file plays DEV_SAMPLE_VIDEO_URL outside
   // production, so progress can be tested end to end. No URL is ever stored.
-  private videoUrl(type: string, videoKey: string | null): { url: string | null; isSample: boolean } {
+  private async videoUrl(
+    type: string,
+    videoKey: string | null,
+  ): Promise<{ url: string | null; isSample: boolean }> {
     if (type !== 'Video') return { url: null, isSample: false };
-    if (videoKey) return { url: null, isSample: false }; // TODO(M6): sign videoKey
+    if (videoKey) {
+      const url = await this.storage.signDownload('media', videoKey, { ttlSeconds: VIDEO_URL_TTL_SECONDS });
+      return { url, isSample: false };
+    }
     const sample = this.config.get('DEV_SAMPLE_VIDEO_URL', { infer: true });
     const isProduction = this.config.get('NODE_ENV', { infer: true }) === 'production';
     return sample && !isProduction ? { url: sample, isSample: true } : { url: null, isSample: false };
+  }
+
+  // Links the storage driver cannot sign yet (gcs stub) are left out.
+  private async resourceUrls(keys: string[]): Promise<string[]> {
+    const urls = await Promise.all(
+      keys.map((k) => this.storage.signDownload('media', k, { ttlSeconds: RESOURCE_URL_TTL_SECONDS })),
+    );
+    return urls.filter((u): u is string => u !== null);
   }
 
   async createModule(user: AuthUser, courseId: number, dto: CreateModuleDto) {

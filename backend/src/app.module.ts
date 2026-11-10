@@ -12,6 +12,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { UserThrottlerGuard } from './common/guards/user-throttler.guard';
 import { MailModule } from './common/mail/mail.module';
+import { StorageModule } from './common/storage/storage.module';
 import { EventsModule } from './events/events.module';
 import { OutboxProcessorModule } from './events/outbox-processor.module';
 import { AccessPolicyModule } from './modules/access/access-policy.module';
@@ -53,6 +54,7 @@ import { UsersModule } from './modules/users/users.module';
     CommonAuthModule,
     EventsModule,
     MailModule,
+    StorageModule,
     AccessPolicyModule,
 
     // Feature modules

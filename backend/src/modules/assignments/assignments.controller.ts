@@ -9,6 +9,7 @@ import {
   CreateAssignmentDto,
   CreateSubmissionCommentDto,
   GradeSubmissionDto,
+  SubmissionUploadUrlDto,
   SubmitAssignmentDto,
   UpdateAssignmentDto,
 } from './dto/assignment.dto';
@@ -97,9 +98,26 @@ export class AssignmentsController {
     return this.assignments.submit(user, id, dto);
   }
 
+  // Step 1 of a file submission; then PUT the file, then POST …/submissions {fileKey, fileName}.
+  @Roles('Student')
+  @Post('assignments/:id/submissions/upload-url')
+  submissionUploadUrl(
+    @CurrentUser() user: AuthUser,
+    @IdParam('id', 'assignment') id: number,
+    @Body() dto: SubmissionUploadUrlDto,
+  ) {
+    return this.assignments.submissionUploadUrl(user, id, dto);
+  }
+
   @Get('submissions/:id')
   submission(@CurrentUser() user: AuthUser, @IdParam('id', 'submission') id: number) {
     return this.assignments.getSubmission(user, id);
+  }
+
+  // The student who submitted, or course staff. Link valid 5 minutes.
+  @Get('submissions/:id/download-url')
+  submissionDownloadUrl(@CurrentUser() user: AuthUser, @IdParam('id', 'submission') id: number) {
+    return this.assignments.submissionDownloadUrl(user, id);
   }
 
   @Get('submissions/:id/comments')

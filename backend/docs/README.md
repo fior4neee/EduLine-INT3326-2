@@ -12,6 +12,7 @@ Architecture, decisions, and review material. Code-level API shapes live in [`ba
 | [quiz-submission-design.md](quiz-submission-design.md) | How quiz start/save/submit stay correct under concurrent load | 6 | M1, M2, M3 |
 | [security-checklist.md](security-checklist.md) | Coding rules for every PR, and the week 8 review | 3–8 | M1 |
 | [capacity-and-load-test.md](capacity-and-load-test.md) | DB connections vs Cloud Run instances, k6 scenarios, GCP credit plan | 9 | M1, M5 |
+| [cloud-data-plan.md](cloud-data-plan.md) | How local data gets to Cloud SQL, files to Cloud Storage, and who runs the shared demo environment | 5–7 | M1, M6 |
 
 ## Diagrams
 

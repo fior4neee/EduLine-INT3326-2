@@ -90,6 +90,33 @@ export class EnvironmentVariables {
   // Shared secret for /internal/* (Cloud Scheduler). Empty disables those routes.
   @IsString()
   INTERNAL_API_TOKEN: string = '';
+
+  // Pub/Sub topic for outbox events (e.g. "notifications"). Set on Cloud Run: the
+  // API publishes every event there and the worker handles it. Empty (local
+  // development, tests): the API creates notifications itself.
+  @IsString()
+  PUBSUB_TOPIC: string = '';
+
+  // File storage for lesson media and submissions:
+  //   local = files under STORAGE_LOCAL_DIR, links served by this API (development)
+  //   gcs   = Cloud Storage (M6; uploads answer 501 until implemented)
+  // Empty picks gcs in production and local everywhere else.
+  @IsIn(['', 'local', 'gcs'])
+  STORAGE_DRIVER: '' | 'local' | 'gcs' = '';
+
+  @IsString()
+  STORAGE_LOCAL_DIR: string = 'uploads';
+
+  // Base URL the browser uses to reach this API, for local storage links.
+  // Empty = http://localhost:PORT/api/v1.
+  @IsString()
+  PUBLIC_API_URL: string = '';
+
+  @IsString()
+  STORAGE_MEDIA_BUCKET: string = 'eduline-media';
+
+  @IsString()
+  STORAGE_SUBMISSIONS_BUCKET: string = 'eduline-submissions';
 }
 
 export type AppConfigService = ConfigService<EnvironmentVariables, true>;
@@ -109,6 +136,12 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
   if (env.NODE_ENV === 'production' && env.MAIL_TRANSPORT === 'console') {
     throw new Error(
       'MAIL_TRANSPORT=console prints reset links to the log and is not allowed in production.',
+    );
+  }
+  if (env.STORAGE_DRIVER === '') env.STORAGE_DRIVER = env.NODE_ENV === 'production' ? 'gcs' : 'local';
+  if (env.NODE_ENV === 'production' && env.STORAGE_DRIVER === 'local') {
+    throw new Error(
+      'STORAGE_DRIVER=local keeps files on the instance disk, which Cloud Run wipes; use gcs in production.',
     );
   }
   return env;

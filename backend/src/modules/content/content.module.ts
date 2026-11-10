@@ -3,10 +3,11 @@ import { CoursesModule } from '../courses/courses.module';
 import { ProgressModule } from '../progress/progress.module';
 import { ContentController } from './content.controller';
 import { ContentService } from './content.service';
+import { LessonMediaService } from './lesson-media.service';
 
 @Module({
   imports: [CoursesModule, ProgressModule],
   controllers: [ContentController],
-  providers: [ContentService],
+  providers: [ContentService, LessonMediaService],
 })
 export class ContentModule {}

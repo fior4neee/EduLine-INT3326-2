@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { NotificationsModule } from '../modules/notifications/notifications.module';
+import { EventPublisher } from './event-publisher.service';
 import { InternalController } from './internal.controller';
 import { OutboxProcessor } from './outbox-processor.service';
 
@@ -8,7 +9,7 @@ import { OutboxProcessor } from './outbox-processor.service';
 @Module({
   imports: [NotificationsModule],
   controllers: [InternalController],
-  providers: [OutboxProcessor],
+  providers: [OutboxProcessor, EventPublisher],
   exports: [OutboxProcessor],
 })
 export class OutboxProcessorModule {}

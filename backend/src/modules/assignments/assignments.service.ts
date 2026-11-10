@@ -1,16 +1,22 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { Assignment, Course, Prisma, Submission } from '@prisma/client';
+import { Assignment, Course, Prisma, Submission, SubmissionType } from '@prisma/client';
 import type { AuthUser } from '../../common/auth/auth-user';
+import { MAX_FILE_UPLOAD_SIZE_BYTES } from '../../common/config/upload-limits';
 import { PrismaService, Tx } from '../../common/database/prisma.service';
 import { AppException } from '../../common/errors/app.exception';
 import { toPublicId } from '../../common/ids/public-id';
+import {
+  newObjectKey,
+  StorageService,
+  SUBMISSION_URL_TTL_SECONDS,
+} from '../../common/storage/storage.service';
 import { OutboxService } from '../../events/outbox.service';
 import { AccessPolicyService } from '../access/access-policy.service';
 import { CoursesService } from '../courses/courses.service';
 import { slugify } from '../courses/slug';
 import { ProgressService } from '../progress/progress.service';
 import { toUserSummary } from '../users/user.mapper';
-import { submissionState, submitWindow } from './assignment-rules';
+import { extensionOf, isExtensionAllowed, submissionState, submitWindow } from './assignment-rules';
 import {
   StudentView,
   toAssignmentResponse,
@@ -21,9 +27,14 @@ import {
   CreateAssignmentDto,
   CreateSubmissionCommentDto,
   GradeSubmissionDto,
+  SubmissionUploadUrlDto,
   SubmitAssignmentDto,
   UpdateAssignmentDto,
 } from './dto/assignment.dto';
+
+// docs/storage-cdn-iam.md §2: the original file name never goes into the key.
+const submissionKeyPrefix = (assignmentId: number, userId: string) =>
+  `assignments/${assignmentId}/${userId}`;
 
 type AssignmentWithCourse = Assignment & { course: Pick<Course, 'id' | 'visibility'> };
 
@@ -46,6 +57,7 @@ export class AssignmentsService {
     private readonly courses: CoursesService,
     private readonly progress: ProgressService,
     private readonly outbox: OutboxService,
+    private readonly storage: StorageService,
   ) {}
 
   // ─── Course staff ─────────────────────────────────────────────────────────
@@ -269,44 +281,72 @@ export class AssignmentsService {
     };
   }
 
-  // Text entry submission. Resubmitting replaces it until graded. Submitting
-  // completes the Assignment lesson for progress (M3).
-  async submit(user: AuthUser, id: number, dto: SubmitAssignmentDto) {
+  // Step 1 of a file submission: a link the browser PUTs the file to (15 min).
+  // The file is checked again when it is submitted.
+  async submissionUploadUrl(user: AuthUser, id: number, dto: SubmissionUploadUrlDto) {
     const a = await this.findWithCourse(id);
-    await this.assertStudentCanSee(user, a);
-    if (!(await this.access.canParticipate(user, a.course))) {
+    await this.assertCanSubmit(user, a, 'FileUpload', new Date());
+    this.assertFileAllowed(a, dto.fileName, dto.sizeBytes);
+    const key = newObjectKey(submissionKeyPrefix(a.id, user.id), extensionOf(dto.fileName));
+    const target = await this.storage.signUpload('submissions', key, {
+      contentType: dto.contentType || 'application/octet-stream',
+      maxBytes: MAX_FILE_UPLOAD_SIZE_BYTES,
+    });
+    return { key, ...target };
+  }
+
+  // A text entry ({textBody}) or an uploaded file ({fileKey, fileName}).
+  // Resubmitting replaces it until graded. Submitting completes the Assignment
+  // lesson for progress (M3).
+  async submit(user: AuthUser, id: number, dto: SubmitAssignmentDto) {
+    const isFile = dto.fileKey !== undefined;
+    if (isFile === (dto.textBody !== undefined)) {
       throw new AppException(
-        HttpStatus.FORBIDDEN,
-        'SUBMISSION_NOT_ALLOWED',
-        'Only a student with an active enrollment can submit.',
+        HttpStatus.BAD_REQUEST,
+        'VALIDATION_FAILED',
+        'Send either textBody or fileKey with fileName.',
       );
     }
-    if (!a.submissionTypes.includes('TextEntry')) {
-      throw unprocessable('SUBMISSION_TYPE_NOT_ALLOWED', 'This assignment does not accept text entries.');
-    }
+    const a = await this.findWithCourse(id);
     const now = new Date();
-    const window = submitWindow(a, now);
-    if (window.block === 'NOT_OPEN_YET') {
-      throw unprocessable('ASSIGNMENT_NOT_OPEN', 'This assignment is not open for submissions yet.');
-    }
-    if (window.block === 'CLOSED') {
-      throw unprocessable('ASSIGNMENT_CLOSED', 'The due date has passed and late work is not accepted.');
-    }
+    const window = await this.assertCanSubmit(user, a, isFile ? 'FileUpload' : 'TextEntry', now);
 
-    const content = {
-      textBody: dto.textBody,
+    let file: Pick<Submission, 'fileKey' | 'fileName' | 'sizeBytes' | 'mimeType'> = {
       fileKey: null,
       fileName: null,
       sizeBytes: null,
       mimeType: null,
+    };
+    if (isFile) {
+      const fileKey = dto.fileKey!;
+      const fileName = dto.fileName!;
+      if (!fileKey.startsWith(`${submissionKeyPrefix(a.id, user.id)}/`)) {
+        throw unprocessable('UPLOAD_NOT_FOUND', 'This file was not uploaded for this assignment.');
+      }
+      const object = await this.storage.stat('submissions', fileKey);
+      if (!object) throw unprocessable('UPLOAD_NOT_FOUND', 'The file has not been uploaded yet.');
+      try {
+        this.assertFileAllowed(a, fileName, object.sizeBytes);
+      } catch (e) {
+        await this.storage.deleteQuietly('submissions', fileKey);
+        throw e;
+      }
+      file = { fileKey, fileName, sizeBytes: object.sizeBytes, mimeType: object.contentType };
+    }
+
+    const content = {
+      textBody: isFile ? null : dto.textBody!,
+      ...file,
       isLate: window.late,
       submittedAt: now,
     };
+    let replacedFileKey: string | null = null;
     const submission = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.submission.findUnique({
         where: { assignmentId_userId: { assignmentId: id, userId: user.id } },
-        select: { id: true },
+        select: { id: true, fileKey: true },
       });
+      if (existing?.fileKey && existing.fileKey !== content.fileKey) replacedFileKey = existing.fileKey;
       let saved: Submission;
       if (existing) {
         // Only while not graded; a concurrent grade wins.
@@ -334,7 +374,67 @@ export class AssignmentsService {
       );
       return saved;
     });
+    // The previous file is no longer referenced once the new submission committed.
+    await this.storage.deleteQuietly('submissions', replacedFileKey);
     return toSubmissionResponse(submission);
+  }
+
+  // Short-lived download link for a submitted file: the student who submitted it
+  // or the course staff. Always downloads (never renders in the browser).
+  async submissionDownloadUrl(user: AuthUser, submissionId: number) {
+    const { submission } = await this.loadSubmissionFor(user, submissionId);
+    if (!submission.fileKey) {
+      throw new AppException(HttpStatus.NOT_FOUND, 'NO_FILE', 'This submission has no file.');
+    }
+    const url = await this.storage.signDownload('submissions', submission.fileKey, {
+      ttlSeconds: SUBMISSION_URL_TTL_SECONDS,
+      downloadName: submission.fileName ?? undefined,
+    });
+    if (!url) {
+      throw new AppException(HttpStatus.NOT_IMPLEMENTED, 'STORAGE_NOT_CONFIGURED', 'File storage is not available on this server yet.');
+    }
+    return { url, expiresAt: new Date(Date.now() + SUBMISSION_URL_TTL_SECONDS * 1000) };
+  }
+
+  // Enrolled, active, the assignment accepts this kind of submission and is open.
+  // Returns whether the submission would be late.
+  private async assertCanSubmit(user: AuthUser, a: AssignmentWithCourse, type: SubmissionType, now: Date) {
+    await this.assertStudentCanSee(user, a);
+    if (!(await this.access.canParticipate(user, a.course))) {
+      throw new AppException(
+        HttpStatus.FORBIDDEN,
+        'SUBMISSION_NOT_ALLOWED',
+        'Only a student with an active enrollment can submit.',
+      );
+    }
+    if (!a.submissionTypes.includes(type)) {
+      throw unprocessable(
+        'SUBMISSION_TYPE_NOT_ALLOWED',
+        type === 'TextEntry'
+          ? 'This assignment does not accept text entries.'
+          : 'This assignment does not accept file uploads.',
+      );
+    }
+    const window = submitWindow(a, now);
+    if (window.block === 'NOT_OPEN_YET') {
+      throw unprocessable('ASSIGNMENT_NOT_OPEN', 'This assignment is not open for submissions yet.');
+    }
+    if (window.block === 'CLOSED') {
+      throw unprocessable('ASSIGNMENT_CLOSED', 'The due date has passed and late work is not accepted.');
+    }
+    return window;
+  }
+
+  private assertFileAllowed(a: Assignment, fileName: string, sizeBytes: number): void {
+    if (!isExtensionAllowed(fileName, a.allowedExtensions)) {
+      throw unprocessable(
+        'FILE_TYPE_NOT_ALLOWED',
+        `Allowed file types: ${a.allowedExtensions.join(', ')}.`,
+      );
+    }
+    if (sizeBytes > MAX_FILE_UPLOAD_SIZE_BYTES) {
+      throw unprocessable('FILE_TOO_LARGE', 'The limit is 100 MB.');
+    }
   }
 
   // The student who owns it, or course staff. Anyone else: 404.

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { EnvironmentVariables } from '../common/config/env.validation';
 import { PrismaService } from '../common/database/prisma.service';
 import { NotificationFanoutService } from '../modules/notifications/notification-fanout.service';
+import { EventPublisher } from './event-publisher.service';
 import type { EventType } from './event-types';
 
 interface OutboxRow {
@@ -17,12 +18,17 @@ export interface ProcessResult {
   failed: number;
 }
 
-// Handles outbox events inside the API (docs/m2-plan.md §5): every few seconds it
-// takes the oldest unhandled event, creates its notifications and marks it
-// handled, in one transaction. "FOR UPDATE SKIP LOCKED" lets several API
-// instances run this at once without handling the same event twice. A failing
-// event is retried on later ticks, up to OUTBOX_MAX_ATTEMPTS, then left aside
-// with its lastError so it cannot block the queue.
+// Delivers outbox events (docs/m2-plan.md §5): every few seconds it takes the
+// oldest unhandled event and, in one transaction, either publishes it to Pub/Sub
+// (when PUBSUB_TOPIC is set: the cloud, where the worker consumes it) or creates
+// its notifications in-process (local development and tests), then marks it
+// handled. "FOR UPDATE SKIP LOCKED" lets several API instances run this at once
+// without handling the same event twice. A failing event is retried on later
+// ticks, up to OUTBOX_MAX_ATTEMPTS, then left aside with its lastError so it
+// cannot block the queue.
+//
+// If the commit fails after a successful publish, the event is published again
+// on a later tick. Consumers dedupe by eventId (Pub/Sub is at-least-once anyway).
 @Injectable()
 export class OutboxProcessor implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger('OutboxProcessor');
@@ -32,6 +38,7 @@ export class OutboxProcessor implements OnApplicationBootstrap, OnModuleDestroy 
   constructor(
     private readonly prisma: PrismaService,
     private readonly fanout: NotificationFanoutService,
+    private readonly publisher: EventPublisher,
     private readonly config: ConfigService<EnvironmentVariables, true>,
   ) {}
 
@@ -90,15 +97,14 @@ export class OutboxProcessor implements OnApplicationBootstrap, OnModuleDestroy 
             FOR UPDATE SKIP LOCKED`;
           if (rows.length === 0) return 'empty' as const;
           claimed = rows[0];
-          await this.fanout.handle(
-            {
-              eventId: claimed.id,
-              type: claimed.type as EventType,
-              occurredAt: claimed.createdAt,
-              data: claimed.payload as never,
-            },
-            tx,
-          );
+          const event = {
+            eventId: claimed.id,
+            type: claimed.type as EventType,
+            occurredAt: claimed.createdAt,
+            data: claimed.payload as never,
+          };
+          if (this.publisher.enabled) await this.publisher.publish(event);
+          else await this.fanout.handle(event, tx);
           await tx.outboxEvent.update({
             where: { id: claimed.id },
             data: { publishedAt: new Date() },

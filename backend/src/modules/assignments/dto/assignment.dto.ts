@@ -137,11 +137,43 @@ export class UpdateAssignmentDto {
   allowLateSubmissions?: boolean;
 }
 
-// Phase 2: text entry. File uploads (fileKey) arrive in phase 3.
+// Either a text entry (textBody) or an uploaded file (fileKey + fileName, after
+// POST /assignments/{id}/submissions/upload-url), not both.
 export class SubmitAssignmentDto {
+  @IsOptional()
   @IsString()
   @Length(1, 50_000)
-  textBody: string;
+  textBody?: string;
+
+  // The key returned by upload-url.
+  @IsOptional()
+  @IsString()
+  @Length(1, 300)
+  fileKey?: string;
+
+  // Original file name, shown to the instructor and used for the download.
+  @ValidateIf((o: SubmitAssignmentDto) => o.fileKey !== undefined)
+  @Trim()
+  @IsString()
+  @Length(1, 255)
+  fileName?: string;
+}
+
+export class SubmissionUploadUrlDto {
+  @Trim()
+  @IsString()
+  @Length(1, 255)
+  fileName: string;
+
+  // As reported by the browser; stored for the download. Not trusted for checks.
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  contentType?: string;
+
+  @IsInt()
+  @Min(1)
+  sizeBytes: number;
 }
 
 export class GradeSubmissionDto {

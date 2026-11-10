@@ -15,3 +15,8 @@ process.env.AUTH_RATE_LIMIT_MAX = '1000000';
 // Tests call OutboxProcessor.processPending() themselves.
 process.env.OUTBOX_POLL_INTERVAL_MS = '0';
 process.env.ASSIGNMENT_REMINDER_INTERVAL_MS = '0';
+// Uploaded test files go to a temporary folder, never into backend/uploads.
+process.env.STORAGE_DRIVER = 'local';
+process.env.STORAGE_LOCAL_DIR = require('node:path').join(require('node:os').tmpdir(), 'eduline-test-uploads');
+// Events are handled in-process; Pub/Sub publishing is tested with a fake publisher.
+process.env.PUBSUB_TOPIC = '';

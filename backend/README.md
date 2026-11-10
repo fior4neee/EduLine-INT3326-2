@@ -515,7 +515,7 @@ Questions and attempts are separate tables, not JSON inside the quiz. This lets 
   - the submission has not been graded (`status` is still `"Submitted"`).
 
   A student who missed the deadline can still submit once (flagged late), but cannot replace that file.
-- The file goes straight from the browser to the private Cloud Storage `submissions` bucket. The database stores only `fileKey` (for example `"submissions/3301/8b9c4d2e…/parse_csv.py"`), which is never sent.
+- The file goes straight from the browser to the private `submissions` bucket. The database stores only `fileKey` (for example `"assignments/3301/8b9c4d2e-…/5f0c…e1.py"`, a random name plus the extension), which is never sent.
 - To download, the student or instructor calls `GET /submissions/{id}/download-url` and gets a short-lived signed URL.
 - Grading sets `status`, `score`, `feedback`, `gradedById` and `gradedAt`, then publishes an `ASSIGNMENT_GRADED` event. The worker turns that event into a Notification.
 
@@ -665,6 +665,19 @@ Full design, test cases and eval results: [docs/m3-plan.md](docs/m3-plan.md).
 | 62 | **`DEV_SAMPLE_VIDEO_URL`:** until the media service signs real uploads, a Video lesson without a file plays this public sample (outside production only, `isSampleVideo: true`). Nothing is stored as a URL. | Progress can be tested end to end before uploads exist. |
 | 63 | **Deleting a lesson or module** deletes students' progress on it (ON DELETE CASCADE) and, in the same transaction, re-checks the course: Active students who have now finished every remaining lesson become **Completed** (`ProgressService.recheckCourseCompletion`, `EnrollmentsService.markCompletedMany`). A course left with no lessons completes nobody. Adding lessons never un-completes anyone. | Same approach as Coursera, Khan Academy and Moodle: progress is measured against the course as it is now, and a finished course stays finished. |
 
+### Changes as of 11/11/2026
+
+Tasks 5.7, 6.2, 6.4 and 7.2 of [docs/cloud-data-plan.md](docs/cloud-data-plan.md). No schema change.
+
+| # | Change | Reason |
+|---|---|---|
+| 64 | **The API starts even when the database is unreachable.** It logs a warning and connects on the first query; `/health` answers `503 DATABASE_UNAVAILABLE` until the database is back, then recovers by itself. | With Cloud SQL stopped or still starting, the container used to crash at startup and Cloud Run showed its own 500/503 pages. |
+| 65 | **File storage** (`src/common/storage/`): `StorageService` with two drivers, chosen by `STORAGE_DRIVER`. `local` (default outside production): files under `STORAGE_LOCAL_DIR` (`backend/uploads/`, not in git), with upload and download links served by the API and signed by HMAC. `gcs` (default in production): **a stub for M6** — uploads answer `501 STORAGE_NOT_CONFIGURED` and download links are left out until M6 implements it (`gcs-storage.driver.ts` lists what each method must do). `local` is refused in production. | Uploads can be built and tested now; Cloud Storage is M6's part (plan 6.1–6.2). Cloud Run's disk is wiped on restart, so files must not live there. |
+| 66 | **Lesson files:** instructors upload a lesson video (`video/mp4` or `video/webm`, ≤ 200 MB) or PDFs (≤ 100 MB) in two steps: `upload-url`, the browser `PUT`s the file, then `complete`. `complete` checks the size, the type and the file's first bytes (an `.exe` renamed to `.pdf` is rejected and deleted). Keys follow `courses/{courseId}/lessons/{lessonId}/{uuid}.{ext}`. `GET /lessons/{id}` now returns signed links: video 2 hours (seeking keeps working), PDFs 10 minutes. The development sample video is still used when a Video lesson has no file. | docs/storage-cdn-iam.md §2–4. |
+| 67 | **File submissions:** `upload-url`, `PUT`, then `POST /assignments/{id}/submissions {fileKey, fileName}`. The extension must be in `allowedExtensions` and the file ≤ 100 MB (checked again on the stored file). A key is only accepted from the student it was issued to. Resubmitting a file replaces it and deletes the old one. `GET /submissions/{id}/download-url` gives the submitter or course staff a 5-minute link that always downloads. | m2-plan.md phase 3. Forcing a download means an uploaded HTML or SVG file is never rendered on our site. |
+| 68 | **Outbox events go to Pub/Sub on the cloud.** When `PUBSUB_TOPIC` is set, the outbox processor publishes each event (`data`: `{eventId, type, occurredAt, data}`, attributes `eventId`, `type`) and marks it handled; it no longer creates notifications itself. When it is empty (local development, tests), the API handles events in-process as before. A failed publish leaves the event unpublished and retries it. Consumers must ignore an `eventId` they have already handled. | ADR-005. Team decision: Pub/Sub only on the cloud, so **cloud notifications stop until M6's worker consumes the `notifications` topic**. |
+| 69 | New dependency `@google-cloud/pubsub` **5.3.1** (6.x needs Node 22; the API image runs Node 20). | |
+
 ---
 
 ## 6. Jobs for later
@@ -675,9 +688,10 @@ These are agreed to be done later. The fields already exist, so no schema change
 |---|---|---|
 | 1 | **Email verification.** Design the flow (email link + token), and decide what an unverified user cannot do. | `User.isVerified` (always `false` for now). Nothing is blocked. |
 | 2 | **Quiz time limit and attempt limit rules.** Decide defaults and how the API enforces them (reject answers after `expiresAt`, reject a new attempt past `maxAttempts`). | `Quiz.timeLimitMinutes`, `Quiz.maxAttempts`, `QuizAttempt.expiresAt`, all optional. Quizzes are untimed and unlimited. |
-| 3 | **Outbox relay** (week 7): publish unpublished `OutboxEvent` rows to Pub/Sub and set `publishedAt`. | Events are already written for `ENROLLMENT_CREATED`, `COURSE_PUBLISHED`, `INSTRUCTOR_REQUEST_DECIDED`, `EMAIL_REQUESTED`. |
-| 4 | **Password reset email template** in the worker (M6) for `EMAIL_REQUESTED` with `template: "password-reset"`. | API side done; set `MAIL_TRANSPORT=outbox` once the worker sends it. |
-| 5 | **RBAC tests** T01–T31 for M2's endpoints. | Jest + Supertest are set up (change 57), with M3's progress, scoring and analytics tests. No M2 tests yet. |
+| 3 | **Password reset email template** in the worker (M6) for `EMAIL_REQUESTED` with `template: "password-reset"`. | API side done; set `MAIL_TRANSPORT=outbox` once the worker sends it. |
+| 4 | **RBAC tests** T01–T31 for M2's endpoints. | Jest + Supertest are set up (change 57), with M3's progress, scoring and analytics tests. No M2 tests yet. |
+| 5 | **Cloud Storage driver** (M6): implement `gcs-storage.driver.ts`. | Endpoints, checks and the local driver are done (change 65–67). |
+| 6 | **Frontend for uploads** (M4/M2): instructor video/PDF upload on the course page; file submission and download on the assignment panel. | API done (changes 66–67). |
 
 ---
 
@@ -725,6 +739,9 @@ Base path `/api/v1`. Full request/response shapes are in Swagger (`/api/docs`). 
 | `DELETE /modules/{id}` | course staff | Deletes its lessons too |
 | `POST /modules/{id}/lessons` | course staff | `{title, type: "Text" \| "Video" \| "Document", textContent?, estimatedDurationMinutes?, isPreview?}` |
 | `DELETE /lessons/{id}` | course staff | |
+| `POST /lessons/{id}/content/upload-url` | course staff | `{kind: "video" \| "resource", contentType, sizeBytes}` → `{key, uploadUrl, method, headers, expiresAt}`. Video: `video/mp4`, `video/webm`, ≤ 200 MB, Video lessons only. Resource: `application/pdf`, ≤ 100 MB |
+| `POST /lessons/{id}/content/complete` | course staff | `{kind, key}` after the browser `PUT`s the file. Checks size, type and the file's first bytes; a bad file is deleted (`422`). Returns the lesson |
+| `DELETE /lessons/{id}/content/video` · `DELETE /lessons/{id}/content/resources/{index}` | course staff | `204`; also deletes the stored file |
 | `GET /lessons/{id}` | enrolled (Active/Completed), course staff, or anyone for a preview lesson | Lesson viewer: `textContent`, `videoUrl` (signed; dev sample until uploads exist), `downloadableResources` |
 | `PUT /lessons/{id}/progress` | Student, Active enrollment | M3. Video heartbeat `{positionSeconds, durationSeconds}` → `{lessonId, lastPositionSeconds, percent, completedAt}` |
 | `POST /lessons/{id}/complete` | Student, Active enrollment | M3. Text and Document lessons only |
@@ -732,5 +749,8 @@ Base path `/api/v1`. Full request/response shapes are in Swagger (`/api/docs`). 
 | `GET /courses/{id}/progress/me` | anyone who can view the course content | M3. `{courseId, progressPercentage, completedLessonIds, resumeLessonId}` |
 | `GET /instructor/courses/{id}/analytics` | course staff | M3. Dashboard numbers: see [docs/m3-plan.md](docs/m3-plan.md) §4.5 |
 | `GET /instructor/courses/{id}/analytics/students` | course staff | M3. `?status=&page=&pageSize=` |
+| `POST /assignments/{id}/submissions/upload-url` | Student, Active enrollment | `{fileName, contentType?, sizeBytes}` → `{key, uploadUrl, method, headers, expiresAt}`. Assignment must accept `FileUpload`; extension in `allowedExtensions`; ≤ 100 MB |
+| `POST /assignments/{id}/submissions` | Student, Active enrollment | `{textBody}` **or** `{fileKey, fileName}` (after the `PUT`), not both. Replacing a file deletes the old one |
+| `GET /submissions/{id}/download-url` | the submitter, course staff | `{url, expiresAt}`, valid 5 minutes, always downloads (never shown in the browser) |
 
 "Course staff" = an Instructor listed on the course, or any Admin. Every error has the shape `{ "error": { "code", "message", "details", "requestId" } }`; the `code` values are stable and meant for the frontend to switch on (e.g. `ALREADY_ENROLLED`, `PREREQUISITES_NOT_MET`, `INVALID_COURSE_PASSWORD`).

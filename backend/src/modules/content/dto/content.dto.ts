@@ -40,3 +40,33 @@ export class CreateLessonDto {
   @IsBoolean()
   isPreview?: boolean;
 }
+
+// What a lesson file is: the lesson's video, or a downloadable resource (PDF).
+export const LESSON_FILE_KINDS = ['video', 'resource'] as const;
+export type LessonFileKind = (typeof LESSON_FILE_KINDS)[number];
+
+export class LessonUploadUrlDto {
+  @ApiProperty({ enum: LESSON_FILE_KINDS })
+  @IsIn(LESSON_FILE_KINDS)
+  kind: LessonFileKind;
+
+  // video: video/mp4 or video/webm. resource: application/pdf.
+  @IsString()
+  @MaxLength(100)
+  contentType: string;
+
+  @IsInt()
+  @Min(1)
+  sizeBytes: number;
+}
+
+export class LessonUploadCompleteDto {
+  @ApiProperty({ enum: LESSON_FILE_KINDS })
+  @IsIn(LESSON_FILE_KINDS)
+  kind: LessonFileKind;
+
+  // The key returned by upload-url.
+  @IsString()
+  @Length(1, 300)
+  key: string;
+}
