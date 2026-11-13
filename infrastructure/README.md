@@ -53,6 +53,20 @@ Cách duy nhất vào DB là **Cloud SQL Auth Proxy**, xác thực bằng IAM (x
 
 `connection_limit=5` × `--max-instances 3` = 15 kết nối, dưới giới hạn của `db-f1-micro`. Tăng max-instances thì phải tính lại.
 
+### Dữ liệu demo: export / import
+
+Script chạy từ laptop Windows (PowerShell 5.1), không cần Cloud Shell. Chi tiết và các bước: [cloud-data-plan §4](../backend/docs/cloud-data-plan.md#4-quy-trình-import-script-54-chạy-từ-laptop-windows-powershell-51).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File infrastructure\scripts\db-export.ps1                     # laptop -> Desktop (ngoài repo)
+powershell -ExecutionPolicy Bypass -File infrastructure\scripts\db-import.ps1 -Database eduline_staging -File <file>
+powershell -ExecutionPolicy Bypass -File infrastructure\scripts\db-import.ps1 -Database eduline -File <file>   # bắt gõ xác nhận
+```
+
+`db-import.ps1` tự backup, bật/tắt proxy, so migration, xóa và nạp trong một transaction, in số dòng và kiểm tra sequence. File dump (`*.sql`, `*.dump`) đã nằm trong `.gitignore`; xóa file sau khi import.
+
+Database nháp `eduline_staging` (cùng instance, đã migrate) dùng để thử script và kiểm tra khôi phục.
+
 ### Tiết kiệm credit
 
 Cloud SQL tính tiền liên tục khi bật, kể cả lúc không ai dùng. Tắt giữa các buổi demo:
