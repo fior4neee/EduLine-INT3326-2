@@ -61,17 +61,23 @@ CORS (set on `eduline-media` and `eduline-submissions`, needed for the browser `
 
 One service account per workload. No JSON key files anywhere: Cloud Run uses its attached service account, GitHub Actions uses Workload Identity Federation.
 
+Status as of 14/11/2026 (security review week 8, [security-review-week8.md](security-review-week8.md)): **granted** = exists on GCP now; *(planned)* = not granted yet because the feature is not built. Secret names are the real ones: the DB password lives inside the `database-url` secret (no separate `db-password`).
+
 | Service account | Used by | Roles (scope) |
 |---|---|---|
-| `sa-api` | Cloud Run `api` | `cloudsql.client` (project) · `secretmanager.secretAccessor` (only `db-password`, `jwt-secret`, `cdn-signing-key`) · `pubsub.publisher` (topics `notifications`, `ai-ingest`, `analytics`) · `storage.objectAdmin` (buckets `eduline-media`, `eduline-submissions` only) · `iam.serviceAccountTokenCreator` **on itself** (needed to sign V4 URLs without a key file) · `aiplatform.user` (Gemini for AI tutor) |
-| `sa-worker` | Cloud Run `worker` | `cloudsql.client` · `secretmanager.secretAccessor` (`db-password`, `email-api-key`) · `storage.objectViewer` (`eduline-media`, to read PDFs) · `aiplatform.user` (embeddings) |
-| `sa-pubsub-push` | Pub/Sub push subscriptions | `run.invoker` on `worker` only |
-| `sa-deployer` | GitHub Actions (WIF) | `run.developer` · `artifactregistry.writer` (repo `eduline`) · `iam.serviceAccountUser` on `sa-api` and `sa-worker` |
-| CDN fill SA (Google-managed) | Cloud CDN | `storage.objectViewer` on `eduline-media` |
+| `sa-api` | Cloud Run `api` | **Granted:** `cloudsql.client` (project) · `secretmanager.secretAccessor` on each of `database-url`, `jwt-secret`, `internal-api-token` only · `pubsub.publisher` on topic `notifications` only. *(Planned)*: `secretAccessor` on `cdn-signing-key` · `pubsub.publisher` on `ai-ingest`, `analytics` · `storage.objectAdmin` (buckets `eduline-media`, `eduline-submissions` only) · `iam.serviceAccountTokenCreator` **on itself** (needed to sign V4 URLs without a key file) · `aiplatform.user` (Gemini for AI tutor) |
+| `sa-worker` | Cloud Run `worker` | **Granted:** `cloudsql.client` (project) · `secretmanager.secretAccessor` on `database-url` only. *(Planned)*: `secretAccessor` on `email-api-key` · `storage.objectViewer` (`eduline-media`, to read PDFs) · `aiplatform.user` (embeddings) |
+| `sa-pubsub-push` | Pub/Sub push subscription `notifications-worker` | **Granted:** `run.invoker` on `worker` only. The Pub/Sub service agent has `iam.serviceAccountTokenCreator` on this SA (to mint the OIDC token) |
+| `sa-deployer` | GitHub Actions (WIF) | *(Planned, M5)*: `run.developer` · `artifactregistry.writer` (repo `cloud-run-source-deploy` today; `eduline` planned) · `iam.serviceAccountUser` on `sa-api` and `sa-worker` |
+| CDN fill SA (Google-managed) | Cloud CDN | *(Planned)*: `storage.objectViewer` on `eduline-media` |
+
+Secrets nobody's runtime reads: `demo-admin-password` (cloud Admin password, D6) has **no** binding; only people with project-level Secret Manager access can read it. Cloud Scheduler sends `internal-api-token` as a header stored in the job config, not via IAM.
+
+Today the Cloud Build step of `gcloud run deploy --source` runs as the default compute SA (which has project `Editor`); see review item #7.
 
 Cloud Run network settings:
-- `api`: ingress **internal and Cloud Load Balancing**, so nobody can bypass Cloud Armor through the `*.run.app` URL.
-- `worker`: **no** `--allow-unauthenticated`; only `sa-pubsub-push` (OIDC token) can invoke it.
+- `api`: ingress **internal and Cloud Load Balancing**, so nobody can bypass Cloud Armor through the `*.run.app` URL. *(Planned, M5; today ingress `all` + `allUsers`.)*
+- `worker`: **no** `--allow-unauthenticated`; only `sa-pubsub-push` (OIDC token) can invoke it. **Done** (unauthenticated request → `403`, 14/11).
 
 ## 6. Week 4 security review checklist
 
