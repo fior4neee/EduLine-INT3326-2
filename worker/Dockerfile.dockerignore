@@ -1,0 +1,17 @@
+# Dockerfile-specific ignore file; leaves the existing API build untouched.
+**
+!backend/
+!backend/src/
+!backend/src/**
+!backend/prisma/
+!backend/prisma/**
+!worker/
+!worker/package.json
+!worker/package-lock.json
+!worker/tsconfig.json
+!worker/src/
+!worker/src/**
+!worker/scripts/
+!worker/scripts/**
+!worker/Dockerfile
+!worker/Dockerfile.dockerignore
