@@ -29,7 +29,7 @@ Sau này: Terraform (GCP), k6 load test scripts.
 | API đã bật | `run`, `sqladmin`, `secretmanager`, `artifactregistry`, `cloudbuild`, `iam`, `cloudbilling`, `pubsub`, `cloudscheduler` | |
 | Cloud SQL | `eduline-db`: PostgreSQL 16, Enterprise, `db-f1-micro`, 10 GB, không HA | Connection name: `gen-lang-client-0192726533:asia-southeast1:eduline-db` |
 | Database / user | `eduline` / `eduline` | Mật khẩu chỉ nằm trong secret `database-url` |
-| Secret | `database-url`, `jwt-secret`, `internal-api-token` | Replication `automatic`. `internal-api-token`: 64 ký tự base64url ngẫu nhiên, header `X-Internal-Token` cho `/internal/*` (Cloud Scheduler) |
+| Secret | `database-url`, `jwt-secret`, `internal-api-token` | Replication `automatic`. `internal-api-token`: 64 ký tự base64url ngẫu nhiên, header `X-Internal-Token` cho `/internal/*` (Cloud Scheduler). `demo-admin-password`: mật khẩu Admin trên cloud (D6), **không** cấp cho service account nào, chỉ người có quyền project đọc |
 | Service account runtime | `sa-api@gen-lang-client-0192726533.iam.gserviceaccount.com` | Danh tính của Cloud Run `api` |
 
 ### IAM (least privilege)
@@ -78,6 +78,60 @@ gcloud sql instances patch eduline-db --activation-policy=ALWAYS   # bật lại
 
 Budget alert 50/80/100% đặt ở billing account (Liêm quản lý). Alert **không tự chặn** chi tiêu.
 
+### Runbook demo (7.4)
+
+Ai trong nhóm cũng làm được, chỉ cần gcloud đã đăng nhập vào project. Chạy trong PowerShell, từ thư mục gốc repo.
+
+**Bật**
+
+```powershell
+gcloud config set project gen-lang-client-0192726533
+gcloud sql instances patch eduline-db --activation-policy=ALWAYS --async
+gcloud sql instances describe eduline-db --format="value(state)"     # lặp lại tới khi RUNNABLE (~1-2 phút)
+gcloud scheduler jobs resume outbox-flush --location asia-southeast1
+gcloud scheduler jobs resume assignment-reminders --location asia-southeast1
+Invoke-RestMethod https://api-ziqtauotba-as.a.run.app/api/v1/health  # {"status":"ok","database":"up"}
+```
+
+Lần gọi đầu có thể chậm vài giây (Cloud Run khởi động container). `503 DATABASE_UNAVAILABLE` ngay sau khi bật: chờ 30 s rồi gọi lại.
+
+**Frontend và tài khoản demo**
+
+```powershell
+cd frontend; npm install; npx vite --mode cloud          # http://localhost:5173 (đúng cổng này, CORS chỉ cho phép nó)
+```
+
+| Vai trò | Đăng nhập | Mật khẩu |
+|---|---|---|
+| Admin | `admin` | Trong Secret Manager: `gcloud secrets versions access latest --secret demo-admin-password` (chỉ người có quyền project đọc được; không dán vào chat/slide) |
+| Giảng viên | `minh.nguyen`, `anh.tran`, `bao.le`, `ha.pham` | `Instructor#2026` (mật khẩu demo công khai) |
+| Học viên | `student.demo` | `Student#2026` (mật khẩu demo công khai) |
+
+Kịch bản ngắn: học viên ghi danh khóa #12 → giảng viên `minh.nguyen` tạo + publish bài tập (nộp dạng text) → học viên nộp → giảng viên chấm → học viên thấy thông báo ở `/notifications` (vài giây, tối đa ~1 phút).
+
+**Tắt (sau buổi demo, đừng quên)**
+
+```powershell
+gcloud scheduler jobs pause outbox-flush --location asia-southeast1
+gcloud scheduler jobs pause assignment-reminders --location asia-southeast1
+gcloud sql instances patch eduline-db --activation-policy=NEVER
+gcloud sql instances describe eduline-db --format="value(state)"     # STOPPED
+```
+
+Pause Scheduler để khỏi đánh thức API mỗi phút chỉ để nhận `503` khi DB tắt. Quên resume thì thông báo vẫn đi (API tự poll khi đang có request), chỉ mất lưới an toàn.
+
+**Lỗi thường gặp**
+
+| Hiện tượng | Nguyên nhân | Cách xử lý |
+|---|---|---|
+| API trả trang lỗi 500/503 của Google, hoặc JSON `503 DATABASE_UNAVAILABLE` | Cloud SQL đang tắt hoặc đang khởi động (`MAINTENANCE`, `PENDING_CREATE`) | Chờ `RUNNABLE`; request tiếp theo tự kết nối lại |
+| `409 another operation in progress` khi bật/tắt | Lệnh bật/tắt trước vẫn chạy (Ctrl+C không hủy được) | `gcloud sql operations list --instance eduline-db --filter="status!=DONE"` rồi `gcloud sql operations wait <id>` |
+| Đăng nhập bị từ chối dù đúng mật khẩu | Tài khoản chỉ có ở DB local, hoặc dùng mật khẩu Admin cũ `Admin#2026` (đã đổi 14/11) | Dùng bảng tài khoản ở trên; Admin lấy từ secret |
+| Trình duyệt báo lỗi CORS | Frontend không chạy ở `http://localhost:5173` | Tắt tiến trình đang giữ cổng 5173 rồi chạy lại |
+| Upload video/file nộp bài trả `501` | Driver Cloud Storage (M6, 6.2) chưa xong | Demo bài tập dạng text |
+| Không thấy thông báo | Worker lỗi hoặc message vào DLQ | `gcloud logging read "resource.labels.service_name=worker" --freshness=15m --limit 20`; `gcloud pubsub subscriptions pull notifications-dlq-sub --limit 5` |
+| Terminal như bị treo sau khi bật proxy | Log của proxy in đè dấu nhắc | Ghi log proxy ra file (`-RedirectStandardOutput`), như các script |
+
 ### Kiểm tra trạng thái
 
 ```powershell
@@ -85,7 +139,7 @@ $P = "gen-lang-client-0192726533"
 gcloud config list --format="value(core.account,core.project)"
 gcloud sql instances describe eduline-db --format="value(state)"                  # RUNNABLE
 gcloud sql databases list --instance=eduline-db --format="value(name)"           # có eduline
-gcloud secrets list --format="value(name)"                                       # database-url, jwt-secret
+gcloud secrets list --format="value(name)"                                       # database-url, demo-admin-password, internal-api-token, jwt-secret
 gcloud projects get-iam-policy $P --flatten="bindings[].members" --filter="bindings.members:sa-api@" --format="value(bindings.role)"   # roles/cloudsql.client
 gcloud secrets get-iam-policy database-url --format="value(bindings.role)"       # roles/secretmanager.secretAccessor
 ```
@@ -116,7 +170,32 @@ gcloud run deploy api --source backend --region asia-southeast1 `
 - `backend/` không có `.gcloudignore`, nên `--source backend` upload cả `node_modules` (~500 MB, mất ~10 phút). Image vẫn đúng vì Dockerfile tự `npm ci`.
 - Lần deploy 2026-11-14 (revision `api-00002-rgm`): `/health` → `200`, log có `Outbox events go to Pub/Sub topic "notifications"`.
 
-Migration mới: bật `cloud-sql-proxy <connection name> --port 5433 --gcloud-auth`, đặt `DATABASE_URL` trỏ `127.0.0.1:5433` rồi `npm run prisma:deploy` trong `backend/`.
+#### Quy tắc migration (D7): migrate **trước**, deploy **sau**
+
+API mới truy vấn cột/bảng của migration mới; deploy trước khi migrate thì API lỗi ngay. Mỗi lần merge có thư mục mới trong `backend/prisma/migrations`:
+
+```powershell
+# 0. So sánh: repo có migration nào Cloud SQL chưa có?
+Get-ChildItem backend\prisma\migrations -Directory | ForEach-Object Name
+
+# 1. Proxy riêng (cổng 5434 để không đụng proxy khác), log ra file
+$proxy = Start-Process cloud-sql-proxy -ArgumentList "gen-lang-client-0192726533:asia-southeast1:eduline-db","--port","5434","--gcloud-auth" `
+  -RedirectStandardOutput "$env:TEMP\proxy-migrate.log" -RedirectStandardError "$env:TEMP\proxy-migrate.err.log" -WindowStyle Hidden -PassThru
+
+# 2. DATABASE_URL từ secret, đổi host sang proxy, bỏ tham số Cloud Run; không in ra
+$u = (gcloud secrets versions access latest --secret database-url | Out-String).Trim()
+$env:DATABASE_URL = $u -replace '@localhost/eduline\?.*$', '@127.0.0.1:5434/eduline?schema=public&connection_limit=1'; Remove-Variable u
+Push-Location backend
+npx prisma migrate deploy          # dòng "Datasource" phải là 127.0.0.1:5434, database "eduline"
+Pop-Location
+
+# 3. Dọn NGAY: nếu không, mọi lệnh prisma/npm sau đó trong terminal này trỏ vào Cloud SQL
+Remove-Item Env:DATABASE_URL; Stop-Process -Id $proxy.Id
+
+# 4. Rồi mới deploy API (lệnh ở trên), kiểm tra /health
+```
+
+Migration phải tương thích ngược với bản API đang chạy (thêm cột/bảng, không xóa/đổi tên trong cùng lần), vì giữa bước 2 và 4 bản cũ vẫn phục vụ request. Database `eduline_staging` cũng cần migrate (đổi tên database ở bước 2) nếu còn dùng nó. Sau này M5 đưa bước này vào CI.
 
 ### Cloud Scheduler (tuần 7)
 
