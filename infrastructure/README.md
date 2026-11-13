@@ -26,10 +26,10 @@ Sau này: Terraform (GCP), k6 load test scripts.
 |---|---|---|
 | Project | `gen-lang-client-0192726533` | Billing: free trial của nhóm (Liêm là Owner) |
 | Region | `asia-southeast1` (Singapore) | Gần Việt Nam nhất, đủ dịch vụ |
-| API đã bật | `run`, `sqladmin`, `secretmanager`, `artifactregistry`, `cloudbuild`, `iam`, `cloudbilling` | |
+| API đã bật | `run`, `sqladmin`, `secretmanager`, `artifactregistry`, `cloudbuild`, `iam`, `cloudbilling`, `pubsub`, `cloudscheduler` | |
 | Cloud SQL | `eduline-db`: PostgreSQL 16, Enterprise, `db-f1-micro`, 10 GB, không HA | Connection name: `gen-lang-client-0192726533:asia-southeast1:eduline-db` |
 | Database / user | `eduline` / `eduline` | Mật khẩu chỉ nằm trong secret `database-url` |
-| Secret | `database-url`, `jwt-secret` | Replication `automatic` |
+| Secret | `database-url`, `jwt-secret`, `internal-api-token` | Replication `automatic`. `internal-api-token`: 64 ký tự base64url ngẫu nhiên, header `X-Internal-Token` cho `/internal/*` (Cloud Scheduler) |
 | Service account runtime | `sa-api@gen-lang-client-0192726533.iam.gserviceaccount.com` | Danh tính của Cloud Run `api` |
 
 ### IAM (least privilege)
@@ -37,7 +37,7 @@ Sau này: Terraform (GCP), k6 load test scripts.
 | Principal | Role | Phạm vi |
 |---|---|---|
 | `sa-api` | `roles/cloudsql.client` | Project |
-| `sa-api` | `roles/secretmanager.secretAccessor` | **Từng secret** (`database-url`, `jwt-secret`), không cấp ở project |
+| `sa-api` | `roles/secretmanager.secretAccessor` | **Từng secret** (`database-url`, `jwt-secret`, `internal-api-token`), không cấp ở project |
 
 Secret mới (ví dụ API key của worker) phải cấp quyền riêng cho đúng service account cần nó.
 
@@ -92,12 +92,47 @@ Chạy từ thư mục gốc repo:
 gcloud run deploy api --source backend --region asia-southeast1 `
   --service-account sa-api@gen-lang-client-0192726533.iam.gserviceaccount.com `
   --add-cloudsql-instances gen-lang-client-0192726533:asia-southeast1:eduline-db `
-  --set-secrets "DATABASE_URL=database-url:latest,JWT_ACCESS_SECRET=jwt-secret:latest" `
-  --set-env-vars "NODE_ENV=production,MAIL_TRANSPORT=outbox,CORS_ORIGINS=http://localhost:5173,FRONTEND_URL=http://localhost:5173" `
+  --set-secrets "DATABASE_URL=database-url:latest,JWT_ACCESS_SECRET=jwt-secret:latest,INTERNAL_API_TOKEN=internal-api-token:latest" `
+  --set-env-vars "NODE_ENV=production,MAIL_TRANSPORT=outbox,CORS_ORIGINS=http://localhost:5173,FRONTEND_URL=http://localhost:5173,PUBSUB_TOPIC=notifications" `
   --min-instances 0 --max-instances 3 --allow-unauthenticated --labels app=eduline
 ```
 
+- `PUBSUB_TOPIC=notifications`: API publish mọi outbox event lên topic, worker tạo notification. Bỏ biến này thì API tự tạo notification trong process (chỉ dùng ở local).
+- `INTERNAL_API_TOKEN`: bật các route `/internal/*` cho Cloud Scheduler. Thiếu biến này các route đó trả `404`.
+- `backend/` không có `.gcloudignore`, nên `--source backend` upload cả `node_modules` (~500 MB, mất ~10 phút). Image vẫn đúng vì Dockerfile tự `npm ci`.
+- Lần deploy 2026-11-14 (revision `api-00002-rgm`): `/health` → `200`, log có `Outbox events go to Pub/Sub topic "notifications"`.
+
 Migration mới: bật `cloud-sql-proxy <connection name> --port 5433 --gcloud-auth`, đặt `DATABASE_URL` trỏ `127.0.0.1:5433` rồi `npm run prisma:deploy` trong `backend/`.
+
+### Cloud Scheduler (tuần 7)
+
+| Job | Lịch | Gọi | Ghi chú |
+|---|---|---|---|
+| `outbox-flush` | `* * * * *` | `POST /api/v1/internal/outbox/flush` | Lưới an toàn: dọn outbox event còn `pending` |
+| `assignment-reminders` | `*/15 * * * *` | `POST /api/v1/internal/jobs/assignment-reminders` | Nhắc hạn nộp bài |
+
+Cả hai ở `asia-southeast1`, time zone `Asia/Ho_Chi_Minh`, attempt deadline 60 s, header `X-Internal-Token` = giá trị secret `internal-api-token`.
+
+Vì sao cần Scheduler dù API có vòng poll outbox 2 s (`OUTBOX_POLL_INTERVAL_MS`): với `--min-instances 0`, Cloud Run chỉ cấp CPU khi đang xử lý request và thu instance về 0 khi hết traffic, nên timer trong process không đáng tin. Event publish lỗi hoặc ghi ngay trước khi instance dừng sẽ nằm `pending` tới khi có request kế tiếp. Scheduler đánh thức API mỗi phút để dọn chúng.
+
+Tạo job (giá trị token chỉ nằm trong biến, không in ra):
+
+```powershell
+$tok = gcloud secrets versions access latest --secret internal-api-token
+gcloud scheduler jobs create http outbox-flush --location asia-southeast1 `
+  --schedule "* * * * *" --time-zone "Asia/Ho_Chi_Minh" `
+  --uri "https://api-ziqtauotba-as.a.run.app/api/v1/internal/outbox/flush" --http-method POST `
+  --headers "X-Internal-Token=$tok" --attempt-deadline 60s
+gcloud scheduler jobs create http assignment-reminders --location asia-southeast1 `
+  --schedule "*/15 * * * *" --time-zone "Asia/Ho_Chi_Minh" `
+  --uri "https://api-ziqtauotba-as.a.run.app/api/v1/internal/jobs/assignment-reminders" --http-method POST `
+  --headers "X-Internal-Token=$tok" --attempt-deadline 60s
+Remove-Variable tok
+```
+
+Header lưu trong cấu hình job: ai có quyền xem job (Viewer/Editor của project) đọc được token. Đổi token: thêm version mới cho secret, deploy lại API, rồi `gcloud scheduler jobs update http <job> --update-headers "X-Internal-Token=$tok"`.
+
+Kiểm chứng 2026-11-14: Scheduler gọi `flush` và `assignment-reminders` → `200` (user agent `Google-Cloud-Scheduler`); gọi không header hoặc sai token → `401`.
 
 ### Pub/Sub (tuần 7)
 
@@ -126,4 +161,4 @@ PowerShell 5.1 bỏ dấu `"` khi truyền chuỗi cho chương trình ngoài, n
 - [x] RBAC trên cloud: `GET /admin/users` không token → `401`, Student → `403`, Admin → `200`
 - [x] Pub/Sub topic + dead-letter topic (tuần 7), xem mục Pub/Sub
 - [ ] Deploy worker (M5/M6), chuyển `notifications-worker` sang push (OIDC, `sa-pubsub-push`)
-- [ ] API publish outbox event lên topic `notifications` thay vì tự xử lý trong process
+- [x] API publish outbox event lên topic `notifications` thay vì tự xử lý trong process (`PUBSUB_TOPIC`, secret `internal-api-token`, Scheduler `outbox-flush`)
