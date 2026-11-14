@@ -10,7 +10,7 @@ Không ghi email cá nhân vào file này (repo public); principal là người 
 |---|---|---|
 | Cao | 2 | SA `fiorane-bigquery` có **Owner** và một **key JSON không hết hạn**; default compute SA có **Editor** |
 | Trung bình | 3 | SA `annguyen1` (M1) dùng key JSON; `run/api` chưa sau Load Balancer; Cloud SQL tắt deletion protection |
-| Thấp / ghi nhận | 5 | Token Scheduler đọc được từ cấu hình job; mật khẩu demo công khai; file export trong lịch sử git; budget chưa kiểm chứng được; `sslMode` cho phép không mã hóa |
+| Thấp / ghi nhận | 6 | Token Scheduler đọc được từ cấu hình job; mật khẩu demo công khai; file export trong lịch sử git; budget chưa kiểm chứng được; `sslMode` cho phép không mã hóa; `backend/.env` lọt vào source upload của Cloud Run (đã sửa) |
 | Đạt | 6 | `sa-api`, `sa-worker`, `sa-pubsub-push` least privilege; secret cấp từng cái; worker private; log sạch |
 
 ## Kết quả
@@ -33,6 +33,7 @@ Không ghi email cá nhân vào file này (repo public); principal là người 
 | 14 | Tài khoản demo khác | **Ghi nhận**. Giảng viên/học viên demo dùng mật khẩu công khai (`Instructor#2026`, `Student#2026` trong `seed-demo.ts`) trên API mở ra Internet | Đăng nhập thử | Chấp nhận cho demo (không có dữ liệu thật). Không tạo dữ liệu thật bằng các tài khoản này | — |
 | 15 | File export trong lịch sử git | **Ghi nhận**. `infrastructure/eduline-data.sql` (commit `785196c7`) có email demo, hash argon2 và 10 dòng `refresh_tokens` (chỉ là hash sha256, không dùng lại được) | `git show 785196c7 --stat` | Xóa file khỏi `develop` (5.1, M2); không viết lại lịch sử. `*.sql`/`*.dump` đã vào `.gitignore` | M2 |
 | 16 | Cloud SQL | **Ghi nhận**. Public IP nhưng authorized networks rỗng (chỉ vào qua Auth Proxy, IAM); `sslMode: ALLOW_UNENCRYPTED_AND_ENCRYPTED`; `deletionProtectionEnabled: false`; backup tự động bật 14/11 (7 bản) | `gcloud sql instances describe eduline-db --format="yaml(settings.ipConfiguration,settings.deletionProtectionEnabled,settings.backupConfiguration)"` | Bật deletion protection (`--deletion-protection`). `sslMode=ENCRYPTED_ONLY` không đổi gì thực tế vì không có kết nối trực tiếp, có thể bật cho đủ checklist | M1 |
+| 17 | Source upload của `gcloud run deploy --source backend` | **Đã sửa 14/11**. Trước đó `backend/` không có `.gcloudignore` nên upload 34 098 file / 491 MB, gồm `node_modules` và **`backend/.env`** (env local: DB `localhost`, JWT secret dev, mật khẩu seed Admin local). 2 zip trong `gs://run-sources-…-asia-southeast1/services/api/` (08/11 và 13/11, ~164 MB mỗi cái) nhiều khả năng chứa `.env`; bucket chỉ cho Owner/Editor/Viewer project đọc, không public. Sau khi thêm [`backend/.gcloudignore`](../.gcloudignore): 132 file / 0,8 MB, không còn `node_modules`/`.env`; build `--no-cache` từ đúng tập file này vẫn thành công | `gcloud meta list-files-for-upload backend`; `gcloud storage ls -l gs://run-sources-<project>-asia-southeast1/services/api/` | Xóa 2 zip cũ (image đã build xong, Cloud Run không cần zip); bucket có soft delete 7 ngày. Xác nhận `jwt-secret` trên cloud khác JWT secret trong `.env` local và mật khẩu Admin cloud khác `SEED_ADMIN_PASSWORD` local (#13 đã đổi) | M1 (đã xong phần `.gcloudignore`) |
 
 ## Việc cần người khác
 

@@ -1,0 +1,31 @@
+# Files NOT uploaded by `gcloud run deploy --source backend`.
+# gcloud reads only this file (not the repo-root .gitignore), so without it the
+# upload included node_modules (~490 MB) and .env. Keep in step with .dockerignore,
+# but Dockerfile must stay: Cloud Build needs it to build the image.
+# Check with: gcloud meta list-files-for-upload backend
+
+# VCS and gcloud's own ignore file.
+.git
+.gitignore
+.gcloudignore
+
+# Installed / built inside the image.
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Secrets never leave the laptop; .env.example is documentation only.
+.env*
+!.env.example
+
+# Not needed to build or run the API.
+coverage/
+test/
+docs/
+uploads/
+**/*.log
+
+# Database dumps; Prisma migration SQL is still needed.
+*.sql
+*.dump
+!prisma/migrations/**/*.sql

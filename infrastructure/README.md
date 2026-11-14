@@ -209,7 +209,7 @@ gcloud run deploy api --source backend --region asia-southeast1 `
 
 - `PUBSUB_TOPIC=notifications`: API publish mọi outbox event lên topic, worker tạo notification. Bỏ biến này thì API tự tạo notification trong process (chỉ dùng ở local).
 - `INTERNAL_API_TOKEN`: bật các route `/internal/*` cho Cloud Scheduler. Thiếu biến này các route đó trả `404`.
-- `backend/` không có `.gcloudignore`, nên `--source backend` upload cả `node_modules` (~500 MB, mất ~10 phút). Image vẫn đúng vì Dockerfile tự `npm ci`.
+- `backend/.gcloudignore` (thêm 14/11) loại `node_modules`, `dist`, `.env*`, test, docs khỏi upload: 132 file / 0,8 MB thay vì ~500 MB. Kiểm tra trước khi deploy: `gcloud meta list-files-for-upload backend` không được có `.env` hay `node_modules`. Hai lần deploy trước 14/11 đã upload cả `backend/.env` (xem security-review-week8 #17).
 - Lần deploy 2026-11-14 (revision `api-00002-rgm`): `/health` → `200`, log có `Outbox events go to Pub/Sub topic "notifications"`.
 
 #### Quy tắc migration (D7): migrate **trước**, deploy **sau**
