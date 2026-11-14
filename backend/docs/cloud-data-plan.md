@@ -20,7 +20,7 @@ Hiện tại mỗi laptop có database riêng, nên việc làm trên máy này 
 | Database local | Mỗi laptop một cái, không dùng chung. Laptop của M2: 6 user, 13 khóa học, 2 enrollment, 10 dòng tiến độ. Một laptop khác có 4 enrollment |
 | API khi Cloud SQL tắt | Bản đang chạy trên cloud bị crash lúc khởi động (`P1001 Can't reach database server`), Cloud Run trả trang lỗi 500/503 của Google. **M2 đã sửa trong code ngày 11/11** (5.7), có hiệu lực sau lần deploy tới |
 | File | **Chưa có file nào cần chuyển.** Video đang phát video mẫu. Ảnh bìa khóa học là file tĩnh của frontend (`/images/courses/…`). API upload đã xong (M2, 11/11) nhưng trên cloud chỉ hoạt động khi M6 viết xong driver Cloud Storage |
-| `infrastructure/eduline-data.sql` | Bản export local **đã commit lên repo public** ở `785196c7`. Chỉ có tài khoản demo với mật khẩu vốn đã công khai, nên rủi ro thấp. Giữ lại tới khi import xong rồi xóa (5.1) |
+| `infrastructure/eduline-data.sql` | Bản export local **đã commit lên repo public** ở `785196c7`. Chỉ có tài khoản demo với mật khẩu vốn đã công khai, nên rủi ro thấp. Giữ lại tới khi import xong rồi xóa (5.1). **14/11 (M1):** file này **có** khối `refresh_tokens` (10 dòng) và `password_reset_tokens` (0 dòng), tức không export đúng lệnh ở §4; `db-import.ps1` từ chối nó. Đã import từ một bản lọc bỏ hai khối đó (ngoài repo, đã xóa sau import) |
 
 Vậy "đưa toàn bộ dữ liệu local lên cloud" lúc này là **copy database**, cộng với **dựng Cloud Storage** cho các file sẽ có khi bắt đầu upload.
 
@@ -44,10 +44,10 @@ Vậy "đưa toàn bộ dữ liệu local lên cloud" lúc này là **copy datab
 |---|---|---|---|---|
 | 5.1 | Xóa `infrastructure/eduline-data.sql` khỏi repo (`git rm`) **sau khi import xong (5.5)**. Thêm mẫu file dump vào `.gitignore` (`*.sql`, `*.dump`, trừ `backend/prisma/migrations/**`). | M2 | Chờ 5.5 | File không còn trên `develop`; `git check-ignore` khớp với một file dump mới |
 | 5.2 | Cấp quyền cho M6 (và M2) vào DB qua Auth Proxy: `roles/cloudsql.client` ở project và `roles/secretmanager.secretAccessor` **chỉ trên** secret `database-url`. | M1 | Chưa làm | M6 chạy được `psql … -c "select 1"` qua proxy trong Cloud Shell |
-| 5.3 | Bật **backup tự động hằng ngày** cho `eduline-db` (giữ 7 bản). | M1 | Chưa làm | `gcloud sql instances describe eduline-db --format="value(settings.backupConfiguration.enabled)"` in ra `True` |
-| 5.4 | Viết hai script từ quy trình ở §4: `infrastructure/scripts/db-export.ps1` (laptop: `pg_dump` từ container Docker, lưu **ngoài repo**) và `infrastructure/scripts/db-import.sh` (Cloud Shell: so migration, tạo backup, xóa bảng, nạp trong một transaction, in số dòng). | M1 | Chưa làm | Cả hai script chạy trọn vẹn trên một database nháp `eduline_staging` cùng instance |
-| 5.5 | Import bản export của M2 vào database thật. Đổi mật khẩu Admin. | M1, cùng M2 | Chưa làm | `GET /courses` trên cloud trả đúng `total`; hai laptop chạy `dev:cloud` thấy cùng enrollment |
-| 5.6 | Ghi quy tắc "migration mới" vào phần deploy của `infrastructure/README.md`: `prisma migrate deploy` qua proxy, **rồi mới** `gcloud run deploy`. | M1 | Chưa làm | README đã cập nhật |
+| 5.3 | Bật **backup tự động hằng ngày** cho `eduline-db` (giữ 7 bản). | M1 | **Xong 14/11** (13:00 UTC; chỉ chạy khi instance đang bật) | `gcloud sql instances describe eduline-db --format="value(settings.backupConfiguration.enabled)"` in ra `True` |
+| 5.4 | Viết hai script từ quy trình ở §4: `infrastructure/scripts/db-export.ps1` (laptop: `pg_dump` từ container Docker, lưu **ngoài repo**) và `infrastructure/scripts/db-import.ps1` (**chạy từ laptop**, không cần Cloud Shell: so migration, tạo backup, xóa bảng và nạp trong một transaction, in số dòng, kiểm tra sequence). | M1 | **Xong 14/11**: chạy trọn vẹn vào `eduline_staging` (6 user, 13 khóa học, 2 enrollment, 14 sequence ok) | Cả hai script chạy trọn vẹn trên một database nháp `eduline_staging` cùng instance |
+| 5.5 | Import bản export của M2 vào database thật. Đổi mật khẩu Admin. | M1, cùng M2 | **Import xong 14/11**: 6 user, 13 khóa học, 2 enrollment; `GET /courses` → `total=12` (1 khóa Draft không hiện). Mật khẩu Admin đã đổi, lưu ở secret `demo-admin-password`. Còn: hai laptop cùng thấy enrollment qua `dev:cloud` | `GET /courses` trên cloud trả đúng `total`; hai laptop chạy `dev:cloud` thấy cùng enrollment |
+| 5.6 | Ghi quy tắc "migration mới" vào phần deploy của `infrastructure/README.md`: `prisma migrate deploy` qua proxy, **rồi mới** `gcloud run deploy`. | M1 | **Xong 14/11** (mục "Quy tắc migration (D7)") | README đã cập nhật |
 | 5.7 | API không được crash khi lúc khởi động không kết nối được DB: kết nối lại sau, và `/health` trả JSON `503 DATABASE_UNAVAILABLE`. | M2 | **Xong 11/11** | Thay đổi 64 trong backend README. Có hiệu lực trên cloud sau lần deploy tới |
 
 ### Tuần 6: file trên Cloud Storage (M6 chính, M1 duyệt IAM)
@@ -69,53 +69,46 @@ Vậy "đưa toàn bộ dữ liệu local lên cloud" lúc này là **copy datab
 | 7.1 | Deploy worker lên Cloud Run và chuyển subscription `notifications-worker` sang push (OIDC với `sa-pubsub-push`), như checklist trong `infrastructure/README.md`. | M6, M5 deploy | Chưa làm | Message thử đến được worker; message lỗi vào `notifications-dlq` |
 | 7.2 | API gửi outbox event lên Pub/Sub thay vì tự xử lý trong process (integration-review #22). | M2 code, M1 duyệt | **Code xong 11/11** (thay đổi 68). **M1:** thêm `PUBSUB_TOPIC=notifications` vào `--set-env-vars` ở lần deploy tới (`sa-api` đã có quyền publisher trên topic này) | Chấm bài trên cloud tạo thông báo cho học viên qua worker. **Lưu ý:** từ lúc deploy với `PUBSUB_TOPIC`, thông báo trên cloud chỉ xuất hiện khi worker (7.1) đã đọc topic |
 | 7.3 | Extension `vector` trên Cloud SQL dưới dạng migration Prisma (integration-review #15, #24), trước migration `document_chunks` của M6. | M6 viết, M1 chạy | Chưa làm | `select * from pg_extension where extname='vector'` trả về một dòng trên Cloud SQL |
-| 7.4 | **Runbook demo** một trang trong `infrastructure/README.md`: bật Cloud SQL, chờ `RUNNABLE`, mở `/health`, đăng nhập bằng tài khoản demo, tắt Cloud SQL sau buổi demo. | M1 | Chưa làm | Bất kỳ thành viên nào cũng tự bật được demo |
-| 7.5 | Kiểm tra khôi phục: restore bản backup mới nhất vào `eduline_staging` và so số dòng với database thật. | M1 | Chưa làm | Số dòng khớp; lệnh restore có trong runbook |
+| 7.4 | **Runbook demo** một trang trong `infrastructure/README.md`: bật Cloud SQL, chờ `RUNNABLE`, mở `/health`, đăng nhập bằng tài khoản demo, tắt Cloud SQL sau buổi demo. | M1 | **Xong 14/11** (mục "Runbook demo (7.4)") | Bất kỳ thành viên nào cũng tự bật được demo |
+| 7.5 | Kiểm tra khôi phục: restore một bản backup mới vào **instance tạm** (restore ghi đè cả instance, nên không dùng `eduline_staging` cùng instance) và so số dòng với database thật. | M1 | **Xong 14/11**: backup `1794611988787` → `eduline-restore-tmp`, 21/21 bảng khớp (269 dòng), instance tạm đã xóa (mục "Kiểm tra khôi phục (7.5)" trong `infrastructure/README.md`) | Số dòng khớp; lệnh restore có trong runbook |
+| 7.6 | End-to-end trên cloud: giảng viên chấm bài → `ASSIGNMENT_GRADED` qua Pub/Sub → worker 204 → học viên thấy thông báo. | M1 | **Xong 14/11** (C5). Chạy qua giao diện `--mode cloud` (request tới `api-ziqtauotba-as.a.run.app`), khóa #12, bài `asg_1`, chấm 85/100. Cả 3 event đi hết chuỗi API → outbox → Pub/Sub → worker `204` → `notifications`: `ASSIGNMENT_PUBLISHED` (ntf 2), `ASSIGNMENT_DUE_SOON` (ntf 3), `ASSIGNMENT_GRADED` (ntf 5), trễ 7–18 s từ request tới thông báo. `ASSIGNMENT_DUE_SOON` được publish 2 lần (commit lần đầu quá timeout 15 s), worker bỏ bản trùng (`created: 0`): chống trùng theo `eventId` hoạt động. Chi tiết: mục "Kết quả C5" trong `infrastructure/README.md`; phát hiện → mục 6 #7, #8 | Log `api` (publish) + `worker` (204, `ASSIGNMENT_GRADED`) + dòng `notifications` mới |
 
-## 4. Quy trình import (M2 đã chạy thử bằng tay; làm cơ sở cho script ở 5.4)
+## 4. Quy trình import (script 5.4, chạy từ laptop Windows, PowerShell 5.1)
 
-**Trên laptop có dữ liệu (PowerShell):**
+Không cần Cloud Shell. Cần: Docker Desktop, gcloud đã đăng nhập (quyền `cloudsql.client`, `secretAccessor` trên `database-url`, tạo backup). Proxy dùng `cloud-sql-proxy` có sẵn trong Cloud SDK, nếu không có thì script tải về `%LOCALAPPDATA%\eduline-tools` (ngoài repo).
+
+**1. Export trên laptop có dữ liệu:**
 
 ```powershell
-docker exec eduline-postgres pg_dump -U eduline -d eduline --data-only --no-owner --no-privileges `
-  --exclude-table=_prisma_migrations --exclude-table=refresh_tokens --exclude-table=password_reset_tokens `
-  -f /tmp/eduline-data.sql
-docker cp eduline-postgres:/tmp/eduline-data.sql "$HOME\Desktop\eduline-data.sql"   # ngoài repo
-docker exec eduline-postgres psql -U eduline -d eduline -tAc "select migration_name from _prisma_migrations order by 1"
+powershell -ExecutionPolicy Bypass -File infrastructure\scripts\db-export.ps1          # ghi ra Desktop
 ```
 
-File được ghi trong container rồi copy ra, vì dấu `>` của PowerShell 5.1 lưu file dạng UTF-16 mà `psql` không đọc được.
+Script chạy `pg_dump --data-only` trong container `eduline-postgres` (bỏ `_prisma_migrations`, `refresh_tokens`, `password_reset_tokens`), `docker cp` file ra **ngoài repo** (từ chối đường dẫn trong repo), in số dòng và danh sách migration local. File được ghi trong container rồi copy ra, vì dấu `>` của PowerShell 5.1 lưu UTF-16 mà `psql` không đọc được.
 
-**Trong Cloud Shell**, sau khi upload file (⋮ → Upload):
+**2. Import (chỉ M1, báo nhóm trước, D5):**
 
-```bash
-gcloud config set project gen-lang-client-0192726533
-gcloud sql instances describe eduline-db --format="value(state)"       # phải là RUNNABLE
-gcloud sql backups create --instance=eduline-db --description="before import"
-
-curl -sLo cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64 && chmod +x cloud-sql-proxy
-./cloud-sql-proxy gen-lang-client-0192726533:asia-southeast1:eduline-db --port 5433 > proxy.log 2>&1 &
-DB_URL=$(gcloud secrets versions access latest --secret=database-url \
-  | sed -E 's#@localhost/#@127.0.0.1:5433/#; s#host=/cloudsql/[^&]*&?##')
-PGURL="${DB_URL%%\?*}"            # psql không nhận các tham số riêng của Prisma
-
-# 1. Danh sách migration phải giống hệt trên laptop
-psql "$PGURL" -tAc "select migration_name from _prisma_migrations order by 1"
-
-# 2. Xóa dữ liệu mọi bảng, trừ lịch sử migration
-psql "$PGURL" -v ON_ERROR_STOP=1 -c "DO \$\$ DECLARE r record; BEGIN
-  FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename <> '_prisma_migrations' LOOP
-    EXECUTE format('TRUNCATE TABLE %I RESTART IDENTITY CASCADE', r.tablename);
-  END LOOP; END \$\$;"
-
-# 3. Nạp trong một transaction (được hết hoặc không gì cả), rồi kiểm tra số dòng
-psql "$PGURL" -v ON_ERROR_STOP=1 --single-transaction -f ~/eduline-data.sql
-psql "$PGURL" -c "select (select count(*) from users) users, (select count(*) from courses) courses, (select count(*) from enrollments) enrollments"
-
-kill %1 && rm ~/eduline-data.sql
+```powershell
+powershell -ExecutionPolicy Bypass -File infrastructure\scripts\db-import.ps1 -Database eduline_staging -File "$HOME\Desktop\eduline-data-<ts>.sql"
+powershell -ExecutionPolicy Bypass -File infrastructure\scripts\db-import.ps1 -Database eduline -File "$HOME\Desktop\eduline-data-<ts>.sql"   # bắt gõ "eduline"
 ```
 
-Các lỗi M2 đã gặp, script cần xử lý:
+Các bước script làm:
+
+1. Kiểm tra file: UTF-8, chỉ có lệnh dữ liệu (`SET`, `set_config`, `setval`, `COPY`, `INSERT`), không có `refresh_tokens` / `password_reset_tokens` / `_prisma_migrations`. Sai thì dừng trước mọi thao tác trên cloud.
+2. `-Database eduline` (database thật) phải gõ lại tên để xác nhận.
+3. Instance phải `RUNNABLE`; `gcloud sql backups create` trước khi đụng dữ liệu.
+4. Bật proxy `--gcloud-auth` ở `127.0.0.1:5433`, log ra `%TEMP%\eduline-proxy-*.log`.
+5. Mật khẩu lấy từ secret `database-url` vào biến `PG*` của process (không in, không ghi file); `psql` chạy trong container `postgres:16` nối tới `host.docker.internal:5433`.
+6. Danh sách migration trên database đích phải trùng `backend/prisma/migrations`, nếu không thì dừng (D7).
+7. `TRUNCATE` mọi bảng trừ `_prisma_migrations` **và** nạp file trong **cùng một** transaction (`--single-transaction`, `ON_ERROR_STOP=1`): lỗi ở đâu cũng không đổi gì.
+8. In số dòng `users` / `courses` / `enrollments`, so với file; kiểm tra mọi sequence đi trước `max(id)` (nếu không, INSERT đầu tiên trên cloud sẽ trùng khóa).
+9. Tắt proxy và xóa biến `PG*`, kể cả khi lỗi.
+
+Sau đó: **xóa file export** (chứa email và hash mật khẩu); nếu là `eduline` thì đổi mật khẩu Admin (D6).
+
+Database nháp mới phải có schema trước (`gcloud sql databases create eduline_staging --instance eduline-db`, rồi `prisma migrate deploy` qua proxy với `DATABASE_URL` trỏ `127.0.0.1:<port>/eduline_staging`; xóa `Env:DATABASE_URL` ngay sau đó).
+
+Các lỗi M2 đã gặp khi làm tay (script đã xử lý hoặc in hướng dẫn):
 
 | Hiện tượng | Nguyên nhân | Cách xử lý |
 |---|---|---|
@@ -143,3 +136,5 @@ Các lỗi M2 đã gặp, script cần xử lý:
 | 4 | Có người import trong lúc người khác đang làm trên cloud | D5: chỉ M1 import, và báo trước | M1 |
 | 5 | Cloud chạy bản backend deploy gần nhất, không phải `develop` | Deploy lại sau mỗi lần merge có sửa backend; chạy migration trước (D7) | M1, M5 |
 | 6 | Sau khi deploy với `PUBSUB_TOPIC`, thông báo trên cloud ngừng tới khi có worker | Deploy `PUBSUB_TOPIC` cùng lúc hoặc sau khi worker (7.1) sẵn sàng, nếu cần thông báo cho buổi demo | M1, M6 |
+| 7 | Giảng viên không nhận thông báo khi học viên nộp bài (C5 14/11: đúng thiết kế, không có event lúc nộp) | **Đề xuất cho M2:** thêm event `SUBMISSION_CREATED` (outbox trong cùng transaction với submission) và loại thông báo cho giảng viên của khóa; gộp theo `groupKey` (vd. `asg_1:submissions`) để lớp đông không gửi một thông báo mỗi bài nộp | M2 |
+| 8 | Transaction của outbox quá timeout 15 s trên Cloud Run (C5: `ASSIGNMENT_DUE_SOON` mất 20,4 s, phải publish lại). Giả thuyết, chưa kiểm chứng: API chạy chế độ CPU mặc định (chỉ có CPU khi đang xử lý request), nên vòng poll nền chạy rất chậm giữa các request; độ trễ publish khớp với lúc có request tới (02:42:58, 02:44:59) | Không mất dữ liệu (retry + worker chống trùng). Hướng sửa (M2): publish lên Pub/Sub **ngoài** transaction (claim → commit → publish → đánh dấu), hoặc để Scheduler `outbox-flush` xử lý trong request. Hoặc (M1, tốn tiền hơn): `--no-cpu-throttling` cho `api` | M2, M1 |

@@ -16,6 +16,13 @@ coverage/
 # Prisma
 backend/prisma/*.db
 
+# Database dumps (email + password hashes, D4 in cloud-data-plan): never commit
+*.sql
+*.dump
+!backend/prisma/migrations/**
+# Legacy export, removed after the cloud import (cloud-data-plan 5.1)
+!infrastructure/eduline-data.sql
+
 # Terraform
 .terraform/
 *.tfstate
