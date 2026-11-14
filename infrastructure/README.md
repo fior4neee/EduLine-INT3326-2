@@ -38,6 +38,9 @@ Sau này: Terraform (GCP), k6 load test scripts.
 |---|---|---|
 | `sa-api` | `roles/cloudsql.client` | Project |
 | `sa-api` | `roles/secretmanager.secretAccessor` | **Từng secret** (`database-url`, `jwt-secret`, `internal-api-token`), không cấp ở project |
+| `sa-build` (Cloud Build của `run deploy --source`) | `roles/artifactregistry.writer` | Chỉ repo `cloud-run-source-deploy` |
+| `sa-build` | `roles/storage.objectViewer` | Chỉ bucket `run-sources-gen-lang-client-0192726533-asia-southeast1` (zip source) |
+| `sa-build` | `roles/logging.logWriter` | Project (role này không cấp theo tài nguyên được); build dùng `CLOUD_LOGGING_ONLY` nên không cần logs bucket |
 
 Secret mới (ví dụ API key của worker) phải cấp quyền riêng cho đúng service account cần nó.
 
@@ -215,11 +218,14 @@ gcloud run deploy api --source backend --region asia-southeast1 `
   --add-cloudsql-instances gen-lang-client-0192726533:asia-southeast1:eduline-db `
   --set-secrets "DATABASE_URL=database-url:latest,JWT_ACCESS_SECRET=jwt-secret:latest,INTERNAL_API_TOKEN=internal-api-token:latest" `
   --set-env-vars "NODE_ENV=production,MAIL_TRANSPORT=outbox,CORS_ORIGINS=http://localhost:5173,FRONTEND_URL=http://localhost:5173,PUBSUB_TOPIC=notifications" `
-  --min-instances 0 --max-instances 3 --allow-unauthenticated --labels app=eduline
+  --min-instances 0 --max-instances 3 --allow-unauthenticated --labels app=eduline `
+  --build-service-account projects/gen-lang-client-0192726533/serviceAccounts/sa-build@gen-lang-client-0192726533.iam.gserviceaccount.com
 ```
 
 - `PUBSUB_TOPIC=notifications`: API publish mọi outbox event lên topic, worker tạo notification. Bỏ biến này thì API tự tạo notification trong process (chỉ dùng ở local).
 - `INTERNAL_API_TOKEN`: bật các route `/internal/*` cho Cloud Scheduler. Thiếu biến này các route đó trả `404`.
+- `--build-service-account`: Cloud Build chạy bằng `sa-build` (chỉ đọc zip source, đẩy image, ghi log), không dùng default compute SA (có `roles/editor`). **Bỏ cờ này thì build quay lại compute SA**, và sẽ lỗi sau khi Editor bị gỡ khỏi SA đó. Người deploy cần quyền `actAs` trên `sa-build` và `sa-api` (hiện có qua `roles/editor` của `annguyen1`; khi thu hẹp thì cấp `roles/iam.serviceAccountUser` trên từng SA).
+- Lần deploy 2026-11-14 bằng `sa-build` (build `c1616632`, revision `api-00003-mjx`): zip source 254 KB, không có `.env`/`node_modules`; env, secret, SA, Cloud SQL giống hệt `api-00002-rgm`.
 - `backend/.gcloudignore` (thêm 14/11) loại `node_modules`, `dist`, `.env*`, test, docs khỏi upload: 132 file / 0,8 MB thay vì ~500 MB. Kiểm tra trước khi deploy: `gcloud meta list-files-for-upload backend` không được có `.env` hay `node_modules`. Hai lần deploy trước 14/11 đã upload cả `backend/.env` (xem security-review-week8 #17).
 - Lần deploy 2026-11-14 (revision `api-00002-rgm`): `/health` → `200`, log có `Outbox events go to Pub/Sub topic "notifications"`.
 

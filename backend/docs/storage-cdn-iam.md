@@ -68,12 +68,13 @@ Status as of 14/11/2026 (security review week 8, [security-review-week8.md](secu
 | `sa-api` | Cloud Run `api` | **Granted:** `cloudsql.client` (project) · `secretmanager.secretAccessor` on each of `database-url`, `jwt-secret`, `internal-api-token` only · `pubsub.publisher` on topic `notifications` only. *(Planned)*: `secretAccessor` on `cdn-signing-key` · `pubsub.publisher` on `ai-ingest`, `analytics` · `storage.objectAdmin` (buckets `eduline-media`, `eduline-submissions` only) · `iam.serviceAccountTokenCreator` **on itself** (needed to sign V4 URLs without a key file) · `aiplatform.user` (Gemini for AI tutor) |
 | `sa-worker` | Cloud Run `worker` | **Granted:** `cloudsql.client` (project) · `secretmanager.secretAccessor` on `database-url` only. *(Planned)*: `secretAccessor` on `email-api-key` · `storage.objectViewer` (`eduline-media`, to read PDFs) · `aiplatform.user` (embeddings) |
 | `sa-pubsub-push` | Pub/Sub push subscription `notifications-worker` | **Granted:** `run.invoker` on `worker` only. The Pub/Sub service agent has `iam.serviceAccountTokenCreator` on this SA (to mint the OIDC token) |
+| `sa-build` | Cloud Build step of `gcloud run deploy api --source backend` (`--build-service-account`) | **Granted (14/11):** `artifactregistry.writer` on repo `cloud-run-source-deploy` only · `storage.objectViewer` on bucket `run-sources-gen-lang-client-0192726533-asia-southeast1` only · `logging.logWriter` (project; this role cannot be scoped lower). No key |
 | `sa-deployer` | GitHub Actions (WIF) | *(Planned, M5)*: `run.developer` · `artifactregistry.writer` (repo `cloud-run-source-deploy` today; `eduline` planned) · `iam.serviceAccountUser` on `sa-api` and `sa-worker` |
 | CDN fill SA (Google-managed) | Cloud CDN | *(Planned)*: `storage.objectViewer` on `eduline-media` |
 
 Secrets nobody's runtime reads: `demo-admin-password` (cloud Admin password, D6) has **no** binding; only people with project-level Secret Manager access can read it. Cloud Scheduler sends `internal-api-token` as a header stored in the job config, not via IAM.
 
-Today the Cloud Build step of `gcloud run deploy --source` runs as the default compute SA (which has project `Editor`); see review item #7.
+Since 14/11 the Cloud Build step of `gcloud run deploy --source` runs as `sa-build`, no longer as the default compute SA (which still has project `Editor` until the Owner removes it); see review item #7.
 
 Cloud Run network settings:
 - `api`: ingress **internal and Cloud Load Balancing**, so nobody can bypass Cloud Armor through the `*.run.app` URL. *(Planned, M5; today ingress `all` + `allUsers`.)*
