@@ -104,7 +104,7 @@ Migration mới: bật `cloud-sql-proxy <connection name> --port 5433 --gcloud-a
 | Resource | Cấu hình | Ghi chú |
 |---|---|---|
 | Topic `notifications` | | `sa-api` có `roles/pubsub.publisher` **chỉ trên topic này** |
-| Subscription `notifications-worker` | **Pull** (tạm thời), ack deadline 60 s, retry 10 s → 600 s, dead-letter sau **5** lần | Khi có worker: `gcloud pubsub subscriptions modify-push-config notifications-worker --push-endpoint=<worker url>/... --push-auth-service-account=sa-pubsub-push@...` |
+| Subscription `notifications-worker` | **Push** tới `https://worker-ziqtauotba-as.a.run.app/pubsub/notifications`, OIDC bằng `sa-pubsub-push`, audience = worker URL; ack deadline 60 s, retry 10 s → 600 s, dead-letter sau **5** lần | Wrapped delivery. Pub/Sub service agent có `iam.serviceAccountTokenCreator` trên `sa-pubsub-push` để mint OIDC token. Xem mục Worker |
 | Topic `notifications-dlq` | Dead-letter topic | Pub/Sub service agent có `pubsub.publisher` trên DLQ và `pubsub.subscriber` trên `notifications-worker` (bắt buộc để chuyển message lỗi) |
 | Subscription `notifications-dlq-sub` | Pull, giữ 7 ngày | Topic không có subscription thì message bị **bỏ**, nên DLQ phải có subscription để giữ message lỗi lại mà điều tra |
 
@@ -117,6 +117,35 @@ gcloud pubsub subscriptions pull notifications-dlq-sub --limit=5     # message l
 ```
 
 PowerShell 5.1 bỏ dấu `"` khi truyền chuỗi cho chương trình ngoài, nên trong JSON phải viết `\"`.
+Từ khi subscription là push, `pull notifications-worker` không còn nhận được message; publish message nghiệp vụ thật bằng REST (`Invoke-RestMethod` tới `pubsub.googleapis.com/v1/projects/$P/topics/notifications:publish`, `data` là base64) để tránh lỗi dấu `"`.
+
+### Worker (Cloud Run `worker`, 7.1)
+
+| Thành phần | Giá trị | Ghi chú |
+|---|---|---|
+| URL | `https://worker-ziqtauotba-as.a.run.app` | Endpoint push: `/pubsub/notifications`, health: `/health` |
+| Image | `asia-southeast1-docker.pkg.dev/gen-lang-client-0192726533/cloud-run-source-deploy/worker:cf92de9` | Build từ root repo (`-f worker/Dockerfile`), không dùng `--source worker` vì worker import source backend |
+| Runtime SA | `sa-worker@gen-lang-client-0192726533.iam.gserviceaccount.com` | `roles/cloudsql.client` (project) + `roles/secretmanager.secretAccessor` **chỉ trên `database-url`** |
+| Ai gọi được | Chỉ `sa-pubsub-push` (`roles/run.invoker` **chỉ trên service `worker`**) | Private (`--no-allow-unauthenticated`), không có `allUsers`. Ranh giới xác thực là Cloud Run IAM, app không tự verify JWT |
+| Giới hạn | `--concurrency 5`, `--min-instances 0`, `--max-instances 1`, timeout 60 s | Tổng kết nối DB: api 3 × 5 + worker 1 × 5 = **20**, dưới giới hạn `db-f1-micro`. Tăng max-instances bên nào cũng phải tính lại |
+
+Deploy lại (chạy từ thư mục gốc repo):
+
+```powershell
+$P   = "gen-lang-client-0192726533"
+$IMG = "asia-southeast1-docker.pkg.dev/${P}/cloud-run-source-deploy/worker:<git sha>"
+docker build -f worker/Dockerfile -t $IMG .
+docker push $IMG
+gcloud run deploy worker --image $IMG --region asia-southeast1 `
+  --service-account "sa-worker@${P}.iam.gserviceaccount.com" `
+  --add-cloudsql-instances "${P}:asia-southeast1:eduline-db" `
+  --set-secrets "DATABASE_URL=database-url:latest" `
+  --set-env-vars "NODE_ENV=production" `
+  --port 8080 --timeout 60 --concurrency 5 --min-instances 0 --max-instances 1 `
+  --no-allow-unauthenticated --labels app=eduline
+```
+
+Kiểm chứng 2026-11-14: không token → `403`; `/health` có identity token → `200`; `COURSE_PUBLISHED` hợp lệ qua Pub/Sub → `204`; message `"hello"` → `400` × 5 (cách nhau ~12/15/21/22 s) rồi vào `notifications-dlq-sub` (`DeliveryCount=5`).
 
 ### Việc tiếp theo
 
@@ -125,5 +154,5 @@ PowerShell 5.1 bỏ dấu `"` khi truyền chuỗi cho chương trình ngoài, n
 - [x] Smoke test: `/api/v1/health` → `200 {"status":"ok","database":"up"}`
 - [x] RBAC trên cloud: `GET /admin/users` không token → `401`, Student → `403`, Admin → `200`
 - [x] Pub/Sub topic + dead-letter topic (tuần 7), xem mục Pub/Sub
-- [ ] Deploy worker (M5/M6), chuyển `notifications-worker` sang push (OIDC, `sa-pubsub-push`)
+- [x] Deploy worker (M5/M6), chuyển `notifications-worker` sang push (OIDC, `sa-pubsub-push`), xem mục Worker
 - [ ] API publish outbox event lên topic `notifications` thay vì tự xử lý trong process
