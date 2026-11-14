@@ -65,7 +65,7 @@ powershell -ExecutionPolicy Bypass -File infrastructure\scripts\db-import.ps1 -D
 
 `db-import.ps1` tự backup, bật/tắt proxy, so migration, xóa và nạp trong một transaction, in số dòng và kiểm tra sequence. File dump (`*.sql`, `*.dump`) đã nằm trong `.gitignore`; xóa file sau khi import.
 
-Database nháp `eduline_staging` (cùng instance, đã migrate) dùng để thử script và kiểm tra khôi phục.
+Database nháp `eduline_staging` (cùng instance, đã migrate) dùng để thử script. Kiểm tra khôi phục dùng instance tạm, xem [Kiểm tra khôi phục (7.5)](#kiểm-tra-khôi-phục-75).
 
 ### Tiết kiệm credit
 
@@ -131,6 +131,48 @@ Pause Scheduler để khỏi đánh thức API mỗi phút chỉ để nhận `5
 | Upload video/file nộp bài trả `501` | Driver Cloud Storage (M6, 6.2) chưa xong | Demo bài tập dạng text |
 | Không thấy thông báo | Worker lỗi hoặc message vào DLQ | `gcloud logging read "resource.labels.service_name=worker" --freshness=15m --limit 20`; `gcloud pubsub subscriptions pull notifications-dlq-sub --limit 5` |
 | Terminal như bị treo sau khi bật proxy | Log của proxy in đè dấu nhắc | Ghi log proxy ra file (`-RedirectStandardOutput`), như các script |
+
+**Chưa kiểm chứng trên cloud (chuyển sang phiên sau):** kịch bản chấm bài → thông báo ở trên (C5) chưa chạy end-to-end trên cloud. Tới 14/11 worker mới nhận và xử lý `COURSE_PUBLISHED` (204); chưa có `ASSIGNMENT_GRADED` nào đi qua API → Pub/Sub → worker. Lần chạy tới: mở DevTools → Network, kiểm tra request đi tới `api-ziqtauotba-as.a.run.app` (không phải `localhost:8000`), rồi đối chiếu log `api` và `worker`.
+
+### Kiểm tra khôi phục (7.5)
+
+`gcloud sql backups restore` **ghi đè cả instance đích** (mọi database, user, mật khẩu). Không bao giờ dùng `eduline-db` làm đích. Restore vào một instance tạm, so số dòng, xóa instance tạm.
+
+```powershell
+# 1. Backup mới (ghi lại ID)
+gcloud sql backups create --instance eduline-db --description "restore test <ngày>"
+gcloud sql backups list --instance eduline-db --limit 1 --format="table(id,status,description)"
+
+# 2. Instance tạm: cùng region/version/edition, đĩa >= đĩa nguồn (10 GB), không authorized networks
+gcloud sql instances create eduline-restore-tmp --database-version POSTGRES_16 --region asia-southeast1 `
+  --edition enterprise --tier db-f1-micro --storage-type SSD --storage-size 10 --availability-type zonal `
+  --no-backup --no-deletion-protection --labels app=eduline,purpose=restore-test
+
+# 3. Restore (hỏi xác nhận: kiểm tra đích là eduline-restore-tmp)
+gcloud sql backups restore <BACKUP_ID> --restore-instance eduline-restore-tmp --backup-instance eduline-db
+
+# 4. So số dòng mọi bảng schema public: 2 proxy (5433 -> eduline-db, 5435 -> eduline-restore-tmp),
+#    user/mật khẩu lấy từ secret database-url (restore chép cả user), psql trong container postgres:16:
+#    select table_name, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I',
+#      table_schema, table_name), false, true, '')))[1]::text
+#    from information_schema.tables where table_schema='public' and table_type='BASE TABLE' order by 1;
+
+# 5. Xóa instance tạm và kiểm tra
+gcloud sql instances delete eduline-restore-tmp
+gcloud sql instances list        # chỉ còn eduline-db
+```
+
+Lần chạy 14/11 (backup `1794611988787`, "restore test E 20261114-061945", tạo sau import dữ liệu demo):
+
+| Bước | Thời gian thực tế |
+|---|---|
+| Backup on-demand | 96 s (23:19:48 → 23:21:09 UTC) |
+| Tạo instance tạm | ~10 phút 35 s (23:25:44 → 23:36:19 UTC) |
+| Restore (`RESTORE_VOLUME`) | ~6 phút 36 s (01:30:47 → 01:37:23 UTC) |
+| Kết quả | Database `eduline`: **21/21 bảng khớp**, 269 dòng (gồm `_prisma_migrations` 5, `courses` 13, `users` 6, `enrollments` 2, `notifications` 1, `outbox_events` 2) |
+| Dọn dẹp | Đã xóa instance tạm; `instances list` chỉ còn `eduline-db` |
+
+Ghi chú: lần này label `app/purpose` không được áp vào instance tạm (`userLabels` trống); không ảnh hưởng vì instance đã xóa. Chi phí: instance f1-micro chạy ~2,5 giờ, dưới $0.05.
 
 ### Kiểm tra trạng thái
 
