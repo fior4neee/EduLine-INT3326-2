@@ -132,7 +132,18 @@ Pause Scheduler để khỏi đánh thức API mỗi phút chỉ để nhận `5
 | Không thấy thông báo | Worker lỗi hoặc message vào DLQ | `gcloud logging read "resource.labels.service_name=worker" --freshness=15m --limit 20`; `gcloud pubsub subscriptions pull notifications-dlq-sub --limit 5` |
 | Terminal như bị treo sau khi bật proxy | Log của proxy in đè dấu nhắc | Ghi log proxy ra file (`-RedirectStandardOutput`), như các script |
 
-**Chưa kiểm chứng trên cloud (chuyển sang phiên sau):** kịch bản chấm bài → thông báo ở trên (C5) chưa chạy end-to-end trên cloud. Tới 14/11 worker mới nhận và xử lý `COURSE_PUBLISHED` (204); chưa có `ASSIGNMENT_GRADED` nào đi qua API → Pub/Sub → worker. Lần chạy tới: mở DevTools → Network, kiểm tra request đi tới `api-ziqtauotba-as.a.run.app` (không phải `localhost:8000`), rồi đối chiếu log `api` và `worker`.
+**Kết quả C5 (14/11/2026, kịch bản ở trên chạy end-to-end trên cloud).** Frontend `--mode cloud`; DevTools xác nhận request đi tới `api-ziqtauotba-as.a.run.app`. Khóa #12, bài `asg_1` (hạn 14/11 18:00 giờ VN), `student.demo` nộp text, `minh.nguyen` chấm 85/100. Giờ UTC (giờ VN = UTC+7), revision `api-00002-rgm`:
+
+| Event | Request ở `api` | Outbox → Pub/Sub (`outbox_events.published_at`) | `worker` (push từ Pub/Sub) | Dòng `notifications` (cho `student.demo`) |
+|---|---|---|---|---|
+| `ASSIGNMENT_PUBLISHED` `69983015…` | 02:42:46.0 `POST /assignments/:id/publish` 200 (req `a1fc43cc`) | 02:42:58.6, 0 lần lỗi | 02:43:00.5 `204` (cold start 3,2 s); 02:43:04.1 `handled, created: 1` | id 2, 02:43:04.1 |
+| `ASSIGNMENT_DUE_SOON` `899a4f5d…` | 02:44:36.6 `POST /internal/jobs/assignment-reminders` 200 (chạy tay bằng `gcloud scheduler jobs run`) | 02:44:59.0 `OutboxProcessor warn`: commit quá timeout 15 s (20,4 s) **sau khi** đã publish → `attempts=1`; publish lại, 02:45:01.8 | 02:44:49.4 `204` `created: 1`; 02:45:01.7 `204` `created: 0` (bản trùng, bỏ qua theo `eventId`) | id 3, 02:44:49.5 (id 4 bị bỏ trống: lần insert trùng đã dùng mất một số của sequence) |
+| `ASSIGNMENT_GRADED` `bad4cf67…` | 02:49:52.1 `PATCH /submissions/:id/grade` 200 (req `1cdb91cc`) | 02:49:59.1, 0 lần lỗi | 02:49:59.7 `204`; 02:49:59.8 `handled, created: 1` | id 5, 02:49:59.8 |
+
+- `EventPublisher` không log khi publish thành công. Bằng chứng ở chặng này là `published_at` trong `outbox_events` cộng với message mà worker nhận (`messageId`). Lỗi publish thì `OutboxProcessor` có log `warn`.
+- Học viên thấy cả 3 thông báo. Giảng viên không nhận được thông báo nào, vì lúc nộp bài không có event (đúng thiết kế). Đây là đề xuất cho M2 trong cloud-data-plan, mục 6 #7.
+- Độ trễ từ request tới lúc có thông báo là 7–18 s. Lần commit quá timeout được ghi ở cloud-data-plan, mục 6 #8 (giả thuyết: CPU của `api` bị throttle giữa các request).
+- Cách tra lại: `gcloud logging read 'resource.labels.service_name="worker" AND timestamp>="<UTC>"'`. Bảng `outbox_events` và `notifications` đọc qua proxy, ở chế độ chỉ đọc (`PGOPTIONS=-c default_transaction_read_only=on`).
 
 ### Kiểm tra khôi phục (7.5)
 
